@@ -5,6 +5,7 @@ import helmet from "helmet";
 import healthroute from "./routes/health.routes.js";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.routes.js";
+import { errorHandler } from "./middleware/error.middleware.js";
 
 
 
@@ -28,6 +29,9 @@ app.get("/", (_req, res) => {
 // routes
 app.use("/api/auth", authRoutes);
 app.use("/api/health",healthroute)
+
+
+app.use(errorHandler);
 
 
 export default app;

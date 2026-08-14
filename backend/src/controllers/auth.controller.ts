@@ -6,6 +6,7 @@ import {
   logoutUser,
   refreshAccessToken,
 } from "../services/auth.service.js";
+import userModel from "../models/userModel.js";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -151,3 +152,43 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
+
+export const getMe = async (req: Request, res: Response): Promise<void> => {
+  try{
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+
+      return;
+    }
+
+    const user = await userModel.findById(userId).select("_id name email createdAt avatar");
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+      },
+    });
+
+  }catch{
+    res.status(500).json({
+      success: false,
+      message: "Unable to fetch user data",
+    });
+  }
+}
