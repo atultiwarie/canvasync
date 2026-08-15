@@ -1,18 +1,18 @@
-import {z} from "zod";
+import { z } from "zod";
 
 export const createBoardSchema = z.object({
-    title:z
+  title: z
     .string()
     .trim()
-    .min(3, {message:"Title must be at least 3 characters long"})
-    .max(100, {message:"Title must be at most 100 characters long"}),
+    .min(3, { message: "Title must be at least 3 characters long" })
+    .max(100, { message: "Title must be at most 100 characters long" }),
 
-    descrtiption:z
+  description: z
     .string()
     .trim()
-    .max(50, {message:"Description must be at most 50 characters long"})
-    .optional()
-})
+    .max(500, { message: "Description must be at most 500 characters long" })
+    .optional(),
+});
 
 export const updateBoardSchema = z.object({
   title: z

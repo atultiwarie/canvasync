@@ -4,9 +4,10 @@ import cors from "cors";
 import helmet from "helmet";
 import healthroute from "./routes/health.routes.js";
 import cookieParser from "cookie-parser";
-import authRoutes from "./routes/auth.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 
+import authRoutes from "./routes/auth.routes.js";
+import boardRoutes from "./routes/board.routes.js";
 
 
 
@@ -28,6 +29,9 @@ app.get("/", (_req, res) => {
 
 // routes
 app.use("/api/auth", authRoutes);
+app.use("/api/boards", boardRoutes);
+
+// health check route
 app.use("/api/health",healthroute)
 
 
