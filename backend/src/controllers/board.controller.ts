@@ -4,6 +4,7 @@ import { createBoard,
   getBoardById,
   getUserBoards,
   updateBoard } from "../services/board.service.js";
+import boardModel from "../models/boardModel.js";
 
 // create a new board
 
@@ -44,6 +45,7 @@ export const createBoardController = async (req: Request, res: Response) => {
 // get all boards for a user
 export const getAll = async(req:Request,res:Response):Promise<void>=>{
     try {
+        
         const userId = req.user?.userId;
         if (!userId) {
             res.status(401).json({
@@ -52,11 +54,17 @@ export const getAll = async(req:Request,res:Response):Promise<void>=>{
             });
             return;
         }
+          const totalBoards = await boardModel.countDocuments({
+            ownerId: userId
+          });
+    
         const boards = await getUserBoards(userId);
+        
         res.status(200).json({
             success: true,
             message: "Boards fetched successfully",
-            data: boards
+            total: totalBoards,
+            data: boards,
         });
     } catch (error) {
       const message =

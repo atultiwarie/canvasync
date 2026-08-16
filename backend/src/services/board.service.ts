@@ -26,6 +26,7 @@ export const createBoard = async ({title, description, ownerId}: CreateBoardData
 
 // get all boards for a user
 export const getUserBoards = async (ownerId: string) => {
+
   return boardModel.find({
     ownerId,
   }).sort({
