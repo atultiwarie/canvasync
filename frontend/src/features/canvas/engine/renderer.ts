@@ -13,11 +13,20 @@ export const clearCanvas = (ctx: CanvasRenderingContext2D,canvas: HTMLCanvasElem
         canvas.height);
 }
 
-export const renderElements = ( ctx: CanvasRenderingContext2D, elements: CanvasElement[], camera: Camera) : void => {
-    for (const element of elements) {
-        renderElement(ctx,element,camera)
-    }
-}
+export const renderElements = (
+  ctx: CanvasRenderingContext2D,
+  elements: CanvasElement[],
+  camera: Camera,
+  draftElement?: CanvasElement | null,
+): void => {
+  for (const element of elements) {
+    renderElement(ctx, element, camera);
+  }
+
+  if (draftElement) {
+    renderElement(ctx, draftElement, camera);
+  }
+};
 
 export const renderElement = (ctx: CanvasRenderingContext2D, element: CanvasElement, camera: Camera) : void => {
     switch (element.type) {
@@ -57,7 +66,14 @@ const renderRectangle = (
 
     ctx.strokeStyle = element.strokeColor
     ctx.lineWidth = element.strokeWidth* camera.zoom
+    ctx.fillStyle = element.backgroundColor;
 
+    ctx.fillRect(
+      position.x,
+      position.y,
+      element.width * camera.zoom,
+      element.height * camera.zoom,
+    );
     ctx.strokeRect(
         position.x,
         position.y,
