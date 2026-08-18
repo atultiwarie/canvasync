@@ -1,10 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   clearCanvas,
   renderElements,
   renderSelection,
 } from "../engine/renderer";
+
+import TextEditor from "./TextEditor";
+
+import { createTextElement } from "../engine/element.factory";
 
 import { useCanvasPointerHandlers } from "../interaction/pointer.handler";
 
@@ -14,6 +18,16 @@ import { useCanvasStore } from "../state/canvas.store";
 
 export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [textEditor, setTextEditor] = useState<{
+    worldX: number;
+    worldY: number;
+
+    screenX: number;
+    screenY: number;
+  } | null>(null);
+
+  const addElement = useCanvasStore((state) => state.addElement);
 
   const elements = useCanvasStore((state) => state.elements);
 
@@ -31,7 +45,15 @@ export default function CanvasBoard() {
     handlePointerUp,
     handlePointerCancel,
     handleWheel,
-  } = useCanvasPointerHandlers();
+  } = useCanvasPointerHandlers((worldPoint, screenPoint) => {
+    setTextEditor({
+      worldX: worldPoint.x,
+      worldY: worldPoint.y,
+
+      screenX: screenPoint.x,
+      screenY: screenPoint.y,
+    });
+  });
 
   useCanvasKeyboardHandlers();
 
@@ -86,16 +108,46 @@ export default function CanvasBoard() {
   }, [elements, camera, draftElement, selectedElementId]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`fixed inset-0 z-0 bg-white ${
-        activeTool === "hand" ? "cursor-grab" : "cursor-crosshair"
-      }`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onWheel={handleWheel}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className={`fixed inset-0 z-0 bg-white ${
+          activeTool === "hand"
+            ? "cursor-grab"
+            : activeTool === "text"
+              ? "cursor-text"
+              : "cursor-crosshair"
+        }`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onWheel={handleWheel}
+      />
+
+      {textEditor && (
+        <TextEditor
+          screenX={textEditor.screenX}
+          screenY={textEditor.screenY}
+          initialValue=""
+          onSubmit={(text) => {
+            const element = createTextElement(
+              {
+                x: textEditor.worldX,
+                y: textEditor.worldY,
+              },
+              text,
+            );
+
+            addElement(element);
+
+            setTextEditor(null);
+          }}
+          onCancel={() => {
+            setTextEditor(null);
+          }}
+        />
+      )}
+    </>
   );
 }

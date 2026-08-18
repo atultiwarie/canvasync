@@ -51,13 +51,30 @@ export interface ArrowElement extends BaseElement{
     points: Point[];
 }
 
-export interface TextElement extends BaseElement{
-    type: "text";
-    text: string;
-    fontSize: number;
-    fontFamily: string;
-    // textAlign: "left" | "center" | "right";
-}
+export type TextElement = {
+  id: string;
+  type: "text";
+
+  x: number;
+  y: number;
+
+  width: number;
+  height: number;
+
+  text: string;
+
+  fontSize: number;
+  fontFamily: string;
+
+  rotation: number;
+
+  strokeColor: string;
+  backgroundColor: string;
+  strokeWidth: number;
+
+  createdAt: number;
+  updatedAt: number;
+};
 
 export interface FreeDrawElement extends BaseElement{
     type: "freedraw";

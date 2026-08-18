@@ -2,7 +2,6 @@ import { create } from "zustand";
 
 import type { Camera, CanvasElement, Tool } from "../types/canvas.types";
 
-
 interface CanvasState {
   elements: CanvasElement[];
 
@@ -31,7 +30,6 @@ interface CanvasState {
   selectElement: (elementId: string | null) => void;
 }
 
-
 export const useCanvasStore = create<CanvasState>((set) => ({
   elements: [],
 
@@ -43,8 +41,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   selectedElementId: null,
 
-  //   activeTool: "select",
-  activeTool: "rectangle",
+  activeTool: "select",
 
   draftElement: null,
 

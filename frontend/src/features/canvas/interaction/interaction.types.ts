@@ -6,7 +6,10 @@ export type InteractionState =
     }
   | {
       type: "drawing";
+
       start: Point;
+
+      points: Point[];
     }
   | {
       type: "dragging";
@@ -26,4 +29,10 @@ export type InteractionState =
         y: number;
         zoom: number;
       };
-    };
+    }
+
+    | {
+    type: "text";
+
+    position: Point;
+  }

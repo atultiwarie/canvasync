@@ -1,8 +1,42 @@
+import type { Tool } from "../types/canvas.types";
 import { useCanvasStore } from "../state/canvas.store";
+
+interface ToolButtonProps {
+  tool: Tool;
+  label: string;
+  activeTool: Tool;
+  onSelect: (tool: Tool) => void;
+}
+
+function ToolButton({ tool, label, activeTool, onSelect }: ToolButtonProps) {
+  const isActive = activeTool === tool;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(tool)}
+      className={`rounded px-3 py-2 text-sm transition-colors ${
+        isActive ? "bg-slate-900 text-white" : "bg-slate-100 hover:bg-slate-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+const TOOLS: { tool: Tool; label: string }[] = [
+  { tool: "select", label: "Select" },
+  { tool: "rectangle", label: "Rectangle" },
+  { tool: "ellipse", label: "Ellipse" },
+  { tool: "line", label: "Line" },
+  { tool: "arrow", label: "Arrow" },
+  { tool: "freedraw", label: "Draw" },
+  { tool: "text", label: "Text" },
+  { tool: "hand", label: "Hand" },
+];
 
 export default function CanvasToolbar() {
   const activeTool = useCanvasStore((state) => state.activeTool);
-
   const setActiveTool = useCanvasStore((state) => state.setActiveTool);
 
   return (
@@ -12,55 +46,15 @@ export default function CanvasToolbar() {
         event.stopPropagation();
       }}
     >
-      <button
-        type="button"
-        onClick={() => setActiveTool("select")}
-        className={`rounded px-3 py-2 text-sm ${
-          activeTool === "select" ? "bg-slate-900 text-white" : "bg-slate-100"
-        }`}
-      >
-        Select
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setActiveTool("rectangle")}
-        className={`rounded px-3 py-2 text-sm ${
-          activeTool === "rectangle"
-            ? "bg-slate-900 text-white"
-            : "bg-slate-100"
-        }`}
-      >
-        Rectangle
-      </button>
-      <button
-        type="button"
-        onClick={() => setActiveTool("hand")}
-        className={`rounded px-3 py-2 text-sm ${
-          activeTool === "hand" ? "bg-slate-900 text-white" : "bg-slate-100"
-        }`}
-      >
-        Hand
-      </button>
-      <button
-        type="button"
-        onClick={() => setActiveTool("ellipse")}
-        className={`rounded px-3 py-2 text-sm ${
-          activeTool === "ellipse" ? "bg-slate-900 text-white" : "bg-slate-100"
-        }`}
-      >
-        Ellipse
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setActiveTool("line")}
-        className={`rounded px-3 py-2 text-sm ${
-          activeTool === "line" ? "bg-slate-900 text-white" : "bg-slate-100"
-        }`}
-      >
-        Line
-      </button>
+      {TOOLS.map(({ tool, label }) => (
+        <ToolButton
+          key={tool}
+          tool={tool}
+          label={label}
+          activeTool={activeTool}
+          onSelect={setActiveTool}
+        />
+      ))}
     </div>
   );
 }

@@ -3,7 +3,9 @@ import type { PointerEvent, WheelEvent } from "react";
 
 import { screenToWorld } from "../engine/coordinates";
 import {
+  createArrowElement,
   createEllipseElement,
+  createFreeDrawElement,
   createLineElement,
   createRectangleElement,
 } from "../engine/element.factory";
@@ -16,15 +18,14 @@ import type { Point } from "../types/canvas.types";
 
 import type { InteractionState } from "./interaction.types";
 
-export const useCanvasPointerHandlers = () => {
- 
-
+export const useCanvasPointerHandlers = (
+  onTextStart?: (worldPoint: Point, screenPoint: Point) => void,
+) => {
   const interaction = useRef<InteractionState>({
     type: "idle",
   });
 
   const getState = () => useCanvasStore.getState();
-
 
   const getScreenPoint = (event: PointerEvent<HTMLCanvasElement>): Point => {
     const canvas = event.currentTarget;
@@ -38,17 +39,13 @@ export const useCanvasPointerHandlers = () => {
     };
   };
 
-
-
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     const { activeTool, camera, elements } = getState();
 
-  
     if (event.button === 2) {
       return;
     }
 
- 
     if (activeTool === "hand" || event.button === 1) {
       const screenPoint = getScreenPoint(event);
 
@@ -73,12 +70,21 @@ export const useCanvasPointerHandlers = () => {
 
     const worldPoint = screenToWorld(screenPoint, camera);
 
-   
+    if (activeTool === "text") {
+      onTextStart?.(worldPoint, screenPoint);
+
+      interaction.current = {
+        type: "text",
+
+        position: worldPoint,
+      };
+
+      return;
+    }
 
     if (activeTool === "select") {
       const element = findElementAtPoint(worldPoint, elements);
 
-  
       if (!element) {
         getState().selectElement(null);
 
@@ -109,27 +115,28 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
+    if (
+      activeTool === "rectangle" ||
+      activeTool === "ellipse" ||
+      activeTool === "line" ||
+      activeTool === "arrow" ||
+      activeTool === "freedraw"
+    ) {
+      interaction.current = {
+        type: "drawing",
+        start: worldPoint,
+        points: [worldPoint],
+      };
 
-
-  if (
-    activeTool === "rectangle" ||
-    activeTool === "ellipse" ||
-    activeTool === "line"
-  ) {
-    interaction.current = {
-      type: "drawing",
-      start: worldPoint,
-    };
-
-    return;
-  }
+      return;
+    }
 
     interaction.current = {
       type: "idle",
     };
   };
 
-  const createDrawingElement = (start: Point, end: Point) => {
+  const createDrawingElement = (start: Point, end: Point, points?: Point[]) => {
     const { activeTool } = getState();
 
     switch (activeTool) {
@@ -142,6 +149,12 @@ export const useCanvasPointerHandlers = () => {
       case "line":
         return createLineElement(start, end);
 
+      case "arrow":
+        return createArrowElement(start, end);
+
+      case "freedraw":
+        return createFreeDrawElement(points ?? [start, end]);
+
       default:
         return null;
     }
@@ -152,11 +165,9 @@ export const useCanvasPointerHandlers = () => {
 
     const state = interaction.current;
 
- 
     if (state.type === "idle") {
       return;
     }
-
 
     if (state.type === "panning") {
       const currentScreen = getScreenPoint(event);
@@ -176,7 +187,6 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
-
     if (state.type === "dragging") {
       const screenPoint = getScreenPoint(event);
 
@@ -195,33 +205,43 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
+    if (state.type === "drawing") {
+      const screenPoint = getScreenPoint(event);
 
+      const worldPoint = screenToWorld(screenPoint, camera);
 
-   if (state.type === "drawing") {
-     const screenPoint = getScreenPoint(event);
+      if (getState().activeTool === "freedraw") {
+        const lastPoint = state.points[state.points.length - 1];
 
-     const worldPoint = screenToWorld(screenPoint, camera);
+        const distance = Math.hypot(
+          worldPoint.x - lastPoint.x,
 
-     const draft = createDrawingElement(state.start, worldPoint);
+          worldPoint.y - lastPoint.y,
+        );
 
-     setDraftElement(draft);
+        if (distance >= 2) {
+          state.points.push(worldPoint);
+        }
 
-     return;
-   }
+        const draft = createFreeDrawElement(state.points);
+
+        setDraftElement(draft);
+
+        return;
+      }
+
+      const draft = createDrawingElement(state.start, worldPoint);
+
+      setDraftElement(draft);
+    }
   };
-
-
 
   const handlePointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
     const state = interaction.current;
 
-
-
     if (state.type === "idle") {
       return;
     }
-
-  
 
     if (state.type === "panning") {
       releasePointerCapture(event);
@@ -233,8 +253,6 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
-
-
     if (state.type === "dragging") {
       releasePointerCapture(event);
 
@@ -245,8 +263,6 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
- 
-
     if (state.type === "drawing") {
       const { camera, addElement, setDraftElement } = getState();
 
@@ -254,18 +270,33 @@ export const useCanvasPointerHandlers = () => {
 
       const worldPoint = screenToWorld(screenPoint, camera);
 
-      const element = createDrawingElement(state.start, worldPoint);
+      const activeTool = getState().activeTool;
 
-     if (element) {
-       const isValidElement =
-         element.type === "line"
-           ? element.width >= 2 || element.height >= 2
-           : element.width >= 2 && element.height >= 2;
+      let element;
 
-       if (isValidElement) {
-         addElement(element);
-       }
-     }
+      if (activeTool === "freedraw") {
+        state.points.push(worldPoint);
+
+        element = createFreeDrawElement(state.points);
+      } else {
+        element = createDrawingElement(state.start, worldPoint);
+      }
+
+      if (element) {
+        let isValid = false;
+
+        if (element.type === "line" || element.type === "arrow") {
+          isValid = element.width >= 2 || element.height >= 2;
+        } else if (element.type === "freedraw") {
+          isValid = element.points.length >= 2;
+        } else {
+          isValid = element.width >= 2 && element.height >= 2;
+        }
+
+        if (isValid) {
+          addElement(element);
+        }
+      }
 
       setDraftElement(null);
 
@@ -286,7 +317,6 @@ export const useCanvasPointerHandlers = () => {
 
     getState().setDraftElement(null);
   };
-
 
   const handleWheel = (event: WheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
