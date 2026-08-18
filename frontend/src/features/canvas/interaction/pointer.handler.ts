@@ -10,19 +10,28 @@ import {
   createRectangleElement,
 } from "../engine/element.factory";
 
+import {
+  findResizeHandleAtPoint,
+  isPointOnRotationHandle,
+} from "../engine/selection";
+
+import type { ResizeHandle, SelectionInteraction } from "./selection.types";
+
+import type { Point } from "../types/canvas.types";
+
 import { findElementAtPoint } from "../engine/hitTest";
 
 import { useCanvasStore } from "../state/canvas.store";
 
-import type { Point } from "../types/canvas.types";
-
 import type { InteractionState } from "./interaction.types";
 
-export const useCanvasPointerHandlers = (
-  onTextStart?: (worldPoint: Point, screenPoint: Point) => void,
-) => {
+export const useCanvasPointerHandlers = () => {
   const interaction = useRef<InteractionState>({
     type: "idle",
+  });
+
+  const selectionInteraction = useRef<SelectionInteraction>({
+    type: "none",
   });
 
   const getState = () => useCanvasStore.getState();
@@ -71,27 +80,77 @@ export const useCanvasPointerHandlers = (
     const worldPoint = screenToWorld(screenPoint, camera);
 
     if (activeTool === "text") {
-      onTextStart?.(worldPoint, screenPoint);
+      getState().setPendingTextEdit({
+        worldPoint,
+        initialText: "",
+      });
 
-      interaction.current = {
-        type: "text",
-
-        position: worldPoint,
-      };
+      interaction.current = { type: "idle" };
 
       return;
     }
 
+    const selectedElementId = getState().selectedElementId;
+
+    const selectedElement = elements.find(
+      (element) => element.id === selectedElementId,
+    );
+
     if (activeTool === "select") {
       const element = findElementAtPoint(worldPoint, elements);
 
+      if (selectedElement) {
+        const rotationHandle = isPointOnRotationHandle(
+          worldPoint,
+          selectedElement,
+        );
+
+        if (rotationHandle) {
+          const center = {
+            x: selectedElement.x + selectedElement.width / 2,
+            y: selectedElement.y + selectedElement.height / 2,
+          };
+
+          selectionInteraction.current = {
+            type: "rotate",
+            elementId: selectedElement.id,
+            startMouse: worldPoint,
+            center,
+            startRotation: selectedElement.rotation,
+          };
+
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+
+        const resizeHandle = findResizeHandleAtPoint(
+          worldPoint,
+          selectedElement,
+        );
+
+        if (resizeHandle) {
+          selectionInteraction.current = {
+            type: "resize",
+            elementId: selectedElement.id,
+            handle: resizeHandle,
+            startMouse: worldPoint,
+            startBounds: {
+              x: selectedElement.x,
+              y: selectedElement.y,
+              width: selectedElement.width,
+              height: selectedElement.height,
+            },
+            startPoints: "points" in selectedElement ? [...selectedElement.points] : null,
+          };
+
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+      }
+
       if (!element) {
         getState().selectElement(null);
-
-        interaction.current = {
-          type: "idle",
-        };
-
+        interaction.current = { type: "idle" };
         return;
       }
 
@@ -165,6 +224,77 @@ export const useCanvasPointerHandlers = (
 
     const state = interaction.current;
 
+    const selectionState = selectionInteraction.current;
+
+    const calculateRotation = (center: Point, mouse: Point): number => {
+      return Math.atan2(mouse.y - center.y, mouse.x - center.x);
+    };
+
+    if (selectionInteraction.current.type === "rotate") {
+      const screenPoint = getScreenPoint(event);
+
+      const worldPoint = screenToWorld(screenPoint, camera);
+
+      const state = selectionInteraction.current;
+
+      const element = getState().elements.find(
+        (item) => item.id === state.elementId,
+      );
+
+      if (!element) {
+        return;
+      }
+
+      const currentAngle = calculateRotation(state.center, worldPoint);
+
+      const startAngle = calculateRotation(state.center, state.startMouse);
+
+      const rotation = state.startRotation + (currentAngle - startAngle);
+
+      getState().updateElement(state.elementId, {
+        rotation,
+      });
+
+      return;
+    }
+    if (selectionState.type === "resize") {
+      const screenPoint = getScreenPoint(event);
+
+      const worldPoint = screenToWorld(screenPoint, camera);
+
+      const bounds = resizeElement(
+        selectionState.handle,
+        selectionState.startBounds,
+        selectionState.startMouse,
+        worldPoint,
+      );
+
+      const updates: Record<string, unknown> = { ...bounds };
+
+      if (
+        selectionState.startPoints &&
+        selectionState.startBounds.width !== 0 &&
+        selectionState.startBounds.height !== 0
+      ) {
+        const scaleX = bounds.width / selectionState.startBounds.width;
+        const scaleY = bounds.height / selectionState.startBounds.height;
+        const ox = selectionState.startBounds.x;
+        const oy = selectionState.startBounds.y;
+
+        updates.points = selectionState.startPoints.map((p) => ({
+          x: bounds.x + (p.x - ox) * scaleX,
+          y: bounds.y + (p.y - oy) * scaleY,
+        }));
+      }
+
+      getState().updateElement(
+        selectionState.elementId,
+        updates as Partial<import("../types/canvas.types").CanvasElement>,
+      );
+
+      return;
+    }
+
     if (state.type === "idle") {
       return;
     }
@@ -237,6 +367,28 @@ export const useCanvasPointerHandlers = (
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
+
+    if (selectionInteraction.current.type === "resize") {
+      releasePointerCapture(event);
+
+      selectionInteraction.current = {
+        type: "none",
+      };
+
+      return;
+    }
+
+    if (selectionInteraction.current.type === "rotate") {
+      releasePointerCapture(event);
+
+      selectionInteraction.current = {
+        type: "none",
+      };
+
+      return;
+    }
+
+    
     const state = interaction.current;
 
     if (state.type === "idle") {
@@ -295,6 +447,8 @@ export const useCanvasPointerHandlers = (
 
         if (isValid) {
           addElement(element);
+          getState().selectElement(element.id);
+          getState().setActiveTool("select");
         }
       }
 
@@ -365,4 +519,126 @@ const releasePointerCapture = (event: PointerEvent<HTMLCanvasElement>) => {
   if (canvas.hasPointerCapture(event.pointerId)) {
     canvas.releasePointerCapture(event.pointerId);
   }
+};
+
+
+const resizeElement = (
+  handle: ResizeHandle,
+  startBounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  },
+  startMouse: Point,
+  mouse: Point,
+) => {
+  const minSize = 10;
+
+  let { x, y, width, height } = startBounds;
+
+  const deltaX = mouse.x - startMouse.x;
+
+  const deltaY = mouse.y - startMouse.y;
+
+  switch (handle) {
+    case "right":
+      width = Math.max(minSize, startBounds.width + deltaX);
+      break;
+
+    case "left": {
+      const newX = Math.min(
+        mouse.x,
+        startBounds.x + startBounds.width - minSize,
+      );
+
+      x = newX;
+
+      width = startBounds.width + (startBounds.x - newX);
+
+      break;
+    }
+
+    case "bottom":
+      height = Math.max(minSize, startBounds.height + deltaY);
+      break;
+
+    case "top": {
+      const newY = Math.min(
+        mouse.y,
+        startBounds.y + startBounds.height - minSize,
+      );
+
+      y = newY;
+
+      height = startBounds.height + (startBounds.y - newY);
+
+      break;
+    }
+
+    case "bottom-right":
+      width = Math.max(minSize, startBounds.width + deltaX);
+
+      height = Math.max(minSize, startBounds.height + deltaY);
+
+      break;
+
+    case "bottom-left": {
+      const newX = Math.min(
+        mouse.x,
+        startBounds.x + startBounds.width - minSize,
+      );
+
+      x = newX;
+
+      width = startBounds.width + (startBounds.x - newX);
+
+      height = Math.max(minSize, startBounds.height + deltaY);
+
+      break;
+    }
+
+    case "top-right": {
+      const newY = Math.min(
+        mouse.y,
+        startBounds.y + startBounds.height - minSize,
+      );
+
+      y = newY;
+
+      height = startBounds.height + (startBounds.y - newY);
+
+      width = Math.max(minSize, startBounds.width + deltaX);
+
+      break;
+    }
+
+    case "top-left": {
+      const newX = Math.min(
+        mouse.x,
+        startBounds.x + startBounds.width - minSize,
+      );
+
+      const newY = Math.min(
+        mouse.y,
+        startBounds.y + startBounds.height - minSize,
+      );
+
+      x = newX;
+      y = newY;
+
+      width = startBounds.width + (startBounds.x - newX);
+
+      height = startBounds.height + (startBounds.y - newY);
+
+      break;
+    }
+  }
+
+  return {
+    x,
+    y,
+    width,
+    height,
+  };
 };

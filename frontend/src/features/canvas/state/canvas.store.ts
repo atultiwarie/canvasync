@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-import type { Camera, CanvasElement, Tool } from "../types/canvas.types";
+import type { Camera, CanvasElement, LineElement, Point, Tool } from "../types/canvas.types";
+
+export type PendingTextEdit = {
+  worldPoint: Point;
+  elementId?: string;
+  initialText: string;
+};
 
 interface CanvasState {
   elements: CanvasElement[];
@@ -12,6 +18,8 @@ interface CanvasState {
   selectedElementId: string | null;
 
   activeTool: Tool;
+
+  pendingTextEdit: PendingTextEdit | null;
 
   setElements: (elements: CanvasElement[]) => void;
 
@@ -28,6 +36,8 @@ interface CanvasState {
   setActiveTool: (tool: Tool) => void;
 
   selectElement: (elementId: string | null) => void;
+
+  setPendingTextEdit: (edit: PendingTextEdit | null) => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -45,6 +55,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   draftElement: null,
 
+  pendingTextEdit: null,
+
   setElements: (elements) =>
     set({
       elements,
@@ -57,15 +69,48 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   updateElement: (elementId, updates) =>
     set((state) => ({
-      elements: state.elements.map((element) =>
-        element.id === elementId
-          ? ({
-              ...element,
-              ...updates,
-              updatedAt: Date.now(),
-            } as CanvasElement)
-          : element,
-      ),
+      elements: state.elements.map((element) => {
+        if (element.id !== elementId) {
+          return element;
+        }
+
+        const updated = {
+          ...element,
+          ...updates,
+          updatedAt: Date.now(),
+        } as CanvasElement;
+
+        const updatesRecord = updates as Record<string, unknown>;
+
+        // Auto-recalculate width & height for text elements when text is updated
+        if (updated.type === "text" && typeof updatesRecord.text === "string") {
+          const fontSize = updated.fontSize || 24;
+          const lines = updatesRecord.text.split("\n");
+          const maxLineLen = Math.max(...lines.map((l: string) => l.length), 1);
+          updated.width = Math.max(maxLineLen * fontSize * 0.6, 20);
+          updated.height = fontSize * 1.3 * Math.max(lines.length, 1);
+        }
+
+        // Shift points when x/y is moved on point-based elements
+        if (
+          typeof updates.x === "number" &&
+          typeof updates.y === "number" &&
+          "points" in element &&
+          element.points &&
+          !updatesRecord.points
+        ) {
+          const dx = updates.x - element.x;
+          const dy = updates.y - element.y;
+          if (dx !== 0 || dy !== 0) {
+            (updated as LineElement).points = element.points.map((p) => ({
+              x: p.x + dx,
+              y: p.y + dy,
+            }));
+          }
+        }
+
+        return updated;
+      }),
     })),
 
   removeElement: (elementId) =>
@@ -91,5 +136,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setDraftElement: (draftElement) =>
     set({
       draftElement,
+    }),
+
+  setPendingTextEdit: (pendingTextEdit) =>
+    set({
+      pendingTextEdit,
     }),
 }));

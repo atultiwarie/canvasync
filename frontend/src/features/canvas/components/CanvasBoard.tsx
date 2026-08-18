@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   clearCanvas,
@@ -16,28 +16,24 @@ import { useCanvasKeyboardHandlers } from "../interaction/keyboard.handlers";
 
 import { useCanvasStore } from "../state/canvas.store";
 
+import { worldToScreen, screenToWorld } from "../engine/coordinates";
+
+import { findElementAtPoint } from "../engine/hitTest";
+
 export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const [textEditor, setTextEditor] = useState<{
-    worldX: number;
-    worldY: number;
-
-    screenX: number;
-    screenY: number;
-  } | null>(null);
-
-  const addElement = useCanvasStore((state) => state.addElement);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const elements = useCanvasStore((state) => state.elements);
-
   const camera = useCanvasStore((state) => state.camera);
-
   const draftElement = useCanvasStore((state) => state.draftElement);
-
   const selectedElementId = useCanvasStore((state) => state.selectedElementId);
-
   const activeTool = useCanvasStore((state) => state.activeTool);
+  const addElement = useCanvasStore((state) => state.addElement);
+  const updateElement = useCanvasStore((state) => state.updateElement);
+  const selectElement = useCanvasStore((state) => state.selectElement);
+  const pendingTextEdit = useCanvasStore((state) => state.pendingTextEdit);
+  const setPendingTextEdit = useCanvasStore((state) => state.setPendingTextEdit);
 
   const {
     handlePointerDown,
@@ -45,67 +41,92 @@ export default function CanvasBoard() {
     handlePointerUp,
     handlePointerCancel,
     handleWheel,
-  } = useCanvasPointerHandlers((worldPoint, screenPoint) => {
-    setTextEditor({
-      worldX: worldPoint.x,
-      worldY: worldPoint.y,
-
-      screenX: screenPoint.x,
-      screenY: screenPoint.y,
-    });
-  });
+  } = useCanvasPointerHandlers();
 
   useCanvasKeyboardHandlers();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
+    if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    if (!ctx) {
-      return;
-    }
-
-    const resizeCanvas = () => {
+    const sizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
 
       canvas.width = window.innerWidth * dpr;
-
       canvas.height = window.innerHeight * dpr;
-
       canvas.style.width = `${window.innerWidth}px`;
-
       canvas.style.height = `${window.innerHeight}px`;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctxRef.current = ctx;
+    };
 
-      clearCanvas(ctx, canvas);
+    sizeCanvas();
+    window.addEventListener("resize", sizeCanvas);
+    return () => window.removeEventListener("resize", sizeCanvas);
+  }, []);
 
-      renderElements(ctx, elements, camera, draftElement);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = ctxRef.current;
+    if (!canvas || !ctx) return;
 
-      if (selectedElementId) {
-        const selectedElement = elements.find(
-          (element) => element.id === selectedElementId,
-        );
+    const elementsToRender = pendingTextEdit?.elementId
+      ? elements.filter((el) => el.id !== pendingTextEdit.elementId)
+      : elements;
 
-        if (selectedElement) {
-          renderSelection(ctx, selectedElement, camera);
-        }
+    clearCanvas(ctx, canvas);
+    renderElements(ctx, elementsToRender, camera, draftElement);
+
+    if (selectedElementId) {
+      const selectedElement = elements.find((el) => el.id === selectedElementId);
+      if (selectedElement) {
+        renderSelection(ctx, selectedElement, camera);
       }
+    }
+  }, [elements, camera, draftElement, selectedElementId, pendingTextEdit]);
+
+  const handleDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenPoint = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
     };
+    const worldPoint = screenToWorld(screenPoint, camera);
+    const element = findElementAtPoint(worldPoint, elements);
 
-    resizeCanvas();
+    if (element) {
+      selectElement(element.id);
 
-    window.addEventListener("resize", resizeCanvas);
+      if (element.type === "text") {
+        setPendingTextEdit({
+          worldPoint: { x: element.x, y: element.y },
+          elementId: element.id,
+          initialText: element.text,
+        });
+      } else {
+        setPendingTextEdit({
+          worldPoint,
+          initialText: "",
+        });
+      }
+    } else {
+      setPendingTextEdit({
+        worldPoint,
+        initialText: "",
+      });
+    }
+  };
 
-    return () => {
-      window.removeEventListener("resize", resizeCanvas);
-    };
-  }, [elements, camera, draftElement, selectedElementId]);
+  const textEditorScreen = pendingTextEdit
+    ? worldToScreen(pendingTextEdit.worldPoint, camera)
+    : null;
 
   return (
     <>
@@ -123,29 +144,26 @@ export default function CanvasBoard() {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onWheel={handleWheel}
+        onDoubleClick={handleDoubleClick}
       />
 
-      {textEditor && (
+      {textEditorScreen && pendingTextEdit && (
         <TextEditor
-          screenX={textEditor.screenX}
-          screenY={textEditor.screenY}
-          initialValue=""
+          screenX={textEditorScreen.x}
+          screenY={textEditorScreen.y}
+          initialValue={pendingTextEdit.initialText}
+          zoom={camera.zoom}
           onSubmit={(text) => {
-            const element = createTextElement(
-              {
-                x: textEditor.worldX,
-                y: textEditor.worldY,
-              },
-              text,
-            );
-
-            addElement(element);
-
-            setTextEditor(null);
+            if (pendingTextEdit.elementId) {
+              updateElement(pendingTextEdit.elementId, { text } as Parameters<typeof updateElement>[1]);
+            } else {
+              const newEl = createTextElement(pendingTextEdit.worldPoint, text);
+              addElement(newEl);
+              selectElement(newEl.id);
+            }
+            setPendingTextEdit(null);
           }}
-          onCancel={() => {
-            setTextEditor(null);
-          }}
+          onCancel={() => setPendingTextEdit(null)}
         />
       )}
     </>

@@ -11,6 +11,8 @@ import type {
 
 import { worldToScreen } from "./coordinates";
 
+import { getHandlePositions, getRotationHandlePosition } from "./selection";
+
 export const clearCanvas = (
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -326,19 +328,37 @@ export const renderSelection = (
   element: CanvasElement,
   camera: Camera,
 ): void => {
-  const position = worldToScreen(
+  const bounds = {
+    x: element.x,
+    y: element.y,
+    width: element.width,
+    height: element.height,
+  };
+
+  const topLeft = worldToScreen(
     {
-      x: element.x,
-      y: element.y,
+      x: bounds.x,
+      y: bounds.y,
     },
     camera,
   );
 
-  const width = element.width * camera.zoom;
+  const bottomRight = worldToScreen(
+    {
+      x: bounds.x + bounds.width,
 
-  const height = element.height * camera.zoom;
+      y: bounds.y + bounds.height,
+    },
+    camera,
+  );
+
+  const width = bottomRight.x - topLeft.x;
+
+  const height = bottomRight.y - topLeft.y;
 
   ctx.save();
+
+
 
   ctx.strokeStyle = "#2563eb";
 
@@ -346,9 +366,75 @@ export const renderSelection = (
 
   ctx.setLineDash([5, 5]);
 
-  ctx.strokeRect(position.x - 4, position.y - 4, width + 8, height + 8);
+  ctx.strokeRect(topLeft.x - 4, topLeft.y - 4, width + 8, height + 8);
 
   ctx.setLineDash([]);
+
+
+  const handles = getHandlePositions(bounds);
+
+  const handleSize = 8;
+
+  ctx.fillStyle = "#ffffff";
+
+  ctx.strokeStyle = "#2563eb";
+
+  for (const point of Object.values(handles)) {
+    const screenPoint = worldToScreen(point, camera);
+
+    ctx.fillRect(
+      screenPoint.x - handleSize / 2,
+
+      screenPoint.y - handleSize / 2,
+
+      handleSize,
+      handleSize,
+    );
+
+    ctx.strokeRect(
+      screenPoint.x - handleSize / 2,
+
+      screenPoint.y - handleSize / 2,
+
+      handleSize,
+      handleSize,
+    );
+  }
+
+  
+
+  const rotationPoint = getRotationHandlePosition(bounds);
+
+  const rotationScreen = worldToScreen(rotationPoint, camera);
+
+  const topCenter = worldToScreen(
+    {
+      x: bounds.x + bounds.width / 2,
+
+      y: bounds.y,
+    },
+    camera,
+  );
+
+
+
+  ctx.beginPath();
+
+  ctx.moveTo(topCenter.x, topCenter.y);
+
+  ctx.lineTo(rotationScreen.x, rotationScreen.y);
+
+  ctx.stroke();
+
+ 
+
+  ctx.beginPath();
+
+  ctx.arc(rotationScreen.x, rotationScreen.y, 6, 0, Math.PI * 2);
+
+  ctx.fill();
+
+  ctx.stroke();
 
   ctx.restore();
 };
