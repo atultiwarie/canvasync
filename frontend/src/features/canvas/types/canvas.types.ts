@@ -1,10 +1,10 @@
-export type ElementType = 
-|"rectangle"
-|"eclipse"
-|"line"
-|"arrow"
-|"text"
-|"freedraw"
+export type ElementType =
+  | "rectangle"
+  | "ellipse"
+  | "line"
+  | "arrow"
+  | "text"
+  | "freedraw";
 
 export interface Point {
     x: number
@@ -37,8 +37,8 @@ export interface RectangleElement extends BaseElement{
     type: "rectangle";
 }
 
-export interface EclipseElement extends BaseElement{
-    type: "eclipse";
+export interface EllipseElement extends BaseElement {
+  type: "ellipse";
 }
 
 export interface LineElement extends BaseElement{
@@ -65,12 +65,12 @@ export interface FreeDrawElement extends BaseElement{
 }
 
 export type CanvasElement =
-    | RectangleElement
-    | EclipseElement
-    | LineElement
-    | ArrowElement
-    | TextElement
-    | FreeDrawElement;
+  | RectangleElement
+  | EllipseElement
+  | LineElement
+  | ArrowElement
+  | TextElement
+  | FreeDrawElement;
 
 export interface Camera {
     x: number;
@@ -79,11 +79,11 @@ export interface Camera {
 }
 
 export type Tool =
-    | "select"
-    | "rectangle"
-    | "eclipse"
-    | "line"
-    | "arrow"
-    | "text"
-    | "freedraw"
-    | "hand";
+  | "select"
+  | "rectangle"
+  | "ellipse"
+  | "line"
+  | "arrow"
+  | "text"
+  | "freedraw"
+  | "hand";

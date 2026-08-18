@@ -1,12 +1,16 @@
 import { useEffect, useRef } from "react";
 
-import { screenToWorld } from "../engine/coordinates";
+import {
+  clearCanvas,
+  renderElements,
+  renderSelection,
+} from "../engine/renderer";
 
-import { createRectangleElement } from "../engine/element.factory";
+import { useCanvasPointerHandlers } from "../interaction/pointer.handler";
+
+import { useCanvasKeyboardHandlers } from "../interaction/keyboard.handlers";
 
 import { useCanvasStore } from "../state/canvas.store";
-
-import { clearCanvas, renderElements } from "../engine/renderer";
 
 export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -15,110 +19,21 @@ export default function CanvasBoard() {
 
   const camera = useCanvasStore((state) => state.camera);
 
-  const addElement = useCanvasStore((state) => state.addElement);
+  const draftElement = useCanvasStore((state) => state.draftElement);
+
+  const selectedElementId = useCanvasStore((state) => state.selectedElementId);
 
   const activeTool = useCanvasStore((state) => state.activeTool);
 
-  const draftElement = useCanvasStore((state) => state.draftElement);
+  const {
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handlePointerCancel,
+    handleWheel,
+  } = useCanvasPointerHandlers();
 
-  const setDraftElement = useCanvasStore((state) => state.setDraftElement);
-
-const drawingStart = useRef<{
-  x: number;
-  y: number;
-} | null>(null);
-
-const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-  if (activeTool !== "rectangle") {
-    return;
-  }
-
-  const canvas = canvasRef.current;
-
-  if (!canvas) {
-    return;
-  }
-
-  const rect = canvas.getBoundingClientRect();
-
-  const screenPoint = {
-    x: event.clientX - rect.left,
-
-    y: event.clientY - rect.top,
-  };
-
-  const worldPoint = screenToWorld(screenPoint, camera);
-
-  drawingStart.current = worldPoint;
-
-  canvas.setPointerCapture(event.pointerId);
-};
-
-const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-  if (activeTool !== "rectangle" || !drawingStart.current) {
-    return;
-  }
-
-  const canvas = canvasRef.current;
-
-  if (!canvas) {
-    return;
-  }
-
-  const rect = canvas.getBoundingClientRect();
-
-  const screenPoint = {
-    x: event.clientX - rect.left,
-
-    y: event.clientY - rect.top,
-  };
-
-  const end = screenToWorld(screenPoint, camera);
-
-  const element = createRectangleElement(drawingStart.current, end);
-
-  if (element.width >= 2 && element.height >= 2) {
-    addElement(element);
-  }
-
-  drawingStart.current = null;
-
-  setDraftElement(null);
-
-  canvas.releasePointerCapture(event.pointerId);
-};
-
-const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-  if (activeTool !== "rectangle" || !drawingStart.current) {
-    return;
-  }
-
-  const canvas = canvasRef.current;
-
-  if (!canvas) {
-    return;
-  }
-
-  const rect = canvas.getBoundingClientRect();
-
-  const screenPoint = {
-    x: event.clientX - rect.left,
-
-    y: event.clientY - rect.top,
-  };
-
-  const worldPoint = screenToWorld(screenPoint, camera);
-
-  const draft = createRectangleElement(drawingStart.current, worldPoint);
-
-  setDraftElement(draft);
-};
-
-const handlePointerCancel = () => {
-  drawingStart.current = null;
-
-  setDraftElement(null);
-};
+  useCanvasKeyboardHandlers();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -132,8 +47,6 @@ const handlePointerCancel = () => {
     if (!ctx) {
       return;
     }
-
-    
 
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -151,6 +64,16 @@ const handlePointerCancel = () => {
       clearCanvas(ctx, canvas);
 
       renderElements(ctx, elements, camera, draftElement);
+
+      if (selectedElementId) {
+        const selectedElement = elements.find(
+          (element) => element.id === selectedElementId,
+        );
+
+        if (selectedElement) {
+          renderSelection(ctx, selectedElement, camera);
+        }
+      }
     };
 
     resizeCanvas();
@@ -160,16 +83,19 @@ const handlePointerCancel = () => {
     return () => {
       window.removeEventListener("resize", resizeCanvas);
     };
-  }, [elements, camera,draftElement]);
+  }, [elements, camera, draftElement, selectedElementId]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 bg-white"
+      className={`fixed inset-0 z-0 bg-white ${
+        activeTool === "hand" ? "cursor-grab" : "cursor-crosshair"
+      }`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
+      onWheel={handleWheel}
     />
   );
 }
