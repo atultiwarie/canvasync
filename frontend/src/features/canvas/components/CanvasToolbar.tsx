@@ -57,7 +57,7 @@ export default function CanvasToolbar() {
           onSelect={setActiveTool}
         />
       ))}
-      <div className="mx-1 my-auto h-5 w-[1px] bg-slate-200" />
+      <div className="mx-1 my-auto h-5 w-px bg-slate-200" />
       <button
         type="button"
         onClick={() => undo()}

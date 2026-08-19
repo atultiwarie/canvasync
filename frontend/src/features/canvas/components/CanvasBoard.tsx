@@ -7,6 +7,7 @@ import {
 } from "../engine/renderer";
 
 import TextEditor from "./TextEditor";
+// import PropertiesPanel from "./PropertiesPanel";
 
 import { createTextElement } from "../engine/element.factory";
 
@@ -146,6 +147,8 @@ export default function CanvasBoard() {
         onWheel={handleWheel}
         onDoubleClick={handleDoubleClick}
       />
+
+      {/* <PropertiesPanel /> */}
 
       {textEditorScreen && pendingTextEdit && (
         <TextEditor

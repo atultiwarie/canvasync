@@ -30,6 +30,9 @@ interface CanvasState {
 
   setElements: (elements: CanvasElement[]) => void;
 
+
+  loadElements: (elements: CanvasElement[]) => void;
+
   addElement: (element: CanvasElement) => void;
 
   updateElement: (
@@ -78,6 +81,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({
       elements,
     }),
+
+  loadElements: (elements) => {
+    set({ elements });
+    useHistoryStore.getState().clear();
+  },
 
   addElement: (element) => {
     set((state) => ({
