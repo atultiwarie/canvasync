@@ -15,6 +15,8 @@ import {
   isPointOnRotationHandle,
 } from "../engine/selection";
 
+import { useHistoryStore } from "../history/history.store";
+
 import type { ResizeHandle, SelectionInteraction } from "./selection.types";
 
 import type { Point } from "../types/canvas.types";
@@ -156,6 +158,7 @@ export const useCanvasPointerHandlers = () => {
 
       getState().selectElement(element.id);
 
+
       interaction.current = {
         type: "dragging",
 
@@ -167,12 +170,18 @@ export const useCanvasPointerHandlers = () => {
           x: element.x,
           y: element.y,
         },
+        lastPosition: {
+          x: element.x,
+          y: element.y,
+        },
       };
 
       event.currentTarget.setPointerCapture(event.pointerId);
 
       return;
     }
+
+    
 
     if (
       activeTool === "rectangle" ||
@@ -251,9 +260,7 @@ export const useCanvasPointerHandlers = () => {
 
       const rotation = state.startRotation + (currentAngle - startAngle);
 
-      getState().updateElement(state.elementId, {
-        rotation,
-      });
+      getState().updateElement(state.elementId, { rotation }, false);
 
       return;
     }
@@ -290,6 +297,7 @@ export const useCanvasPointerHandlers = () => {
       getState().updateElement(
         selectionState.elementId,
         updates as Partial<import("../types/canvas.types").CanvasElement>,
+        false,
       );
 
       return;
@@ -319,18 +327,27 @@ export const useCanvasPointerHandlers = () => {
 
     if (state.type === "dragging") {
       const screenPoint = getScreenPoint(event);
-
       const worldPoint = screenToWorld(screenPoint, camera);
 
       const deltaX = worldPoint.x - state.mouseStart.x;
-
       const deltaY = worldPoint.y - state.mouseStart.y;
 
-      updateElement(state.elementId, {
-        x: state.elementStart.x + deltaX,
+      const newX = state.elementStart.x + deltaX;
+      const newY = state.elementStart.y + deltaY;
 
-        y: state.elementStart.y + deltaY,
-      });
+      updateElement(
+        state.elementId,
+        {
+          x: newX,
+          y: newY,
+        },
+        false,
+      );
+
+      state.lastPosition = {
+        x: newX,
+        y: newY,
+      };
 
       return;
     }
@@ -369,6 +386,30 @@ export const useCanvasPointerHandlers = () => {
   const handlePointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
 
     if (selectionInteraction.current.type === "resize") {
+      const s = selectionInteraction.current;
+      const element = getState().elements.find((el) => el.id === s.elementId);
+
+      if (element) {
+        useHistoryStore.getState().pushOperation({
+          type: "update",
+          elementId: s.elementId,
+          before: {
+            x: s.startBounds.x,
+            y: s.startBounds.y,
+            width: s.startBounds.width,
+            height: s.startBounds.height,
+            ...(s.startPoints ? { points: s.startPoints } : {}),
+          },
+          after: {
+            x: element.x,
+            y: element.y,
+            width: element.width,
+            height: element.height,
+            ...(("points" in element) ? { points: element.points } : {}),
+          },
+        });
+      }
+
       releasePointerCapture(event);
 
       selectionInteraction.current = {
@@ -378,7 +419,20 @@ export const useCanvasPointerHandlers = () => {
       return;
     }
 
+
     if (selectionInteraction.current.type === "rotate") {
+      const s = selectionInteraction.current;
+      const element = getState().elements.find((el) => el.id === s.elementId);
+
+      if (element) {
+        useHistoryStore.getState().pushOperation({
+          type: "update",
+          elementId: s.elementId,
+          before: { rotation: s.startRotation },
+          after: { rotation: element.rotation },
+        });
+      }
+
       releasePointerCapture(event);
 
       selectionInteraction.current = {
@@ -406,6 +460,27 @@ export const useCanvasPointerHandlers = () => {
     }
 
     if (state.type === "dragging") {
+      // The element is already at lastPosition from live preview updates.
+      // We only need to record the history operation with the correct
+      // before (elementStart) and after (lastPosition).
+      const movedX = state.lastPosition.x !== state.elementStart.x;
+      const movedY = state.lastPosition.y !== state.elementStart.y;
+
+      if (movedX || movedY) {
+        useHistoryStore.getState().pushOperation({
+          type: "update",
+          elementId: state.elementId,
+          before: {
+            x: state.elementStart.x,
+            y: state.elementStart.y,
+          },
+          after: {
+            x: state.lastPosition.x,
+            y: state.lastPosition.y,
+          },
+        });
+      }
+
       releasePointerCapture(event);
 
       interaction.current = {

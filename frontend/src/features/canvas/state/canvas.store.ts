@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
-import type { Camera, CanvasElement, LineElement, Point, Tool } from "../types/canvas.types";
+import type { Camera, CanvasElement, Point, Tool } from "../types/canvas.types";
+
+import { useHistoryStore } from "../history/history.store";
+
+import {
+  applyOperation,
+  reverseOperation,
+} from "../history/operation.executor";
 
 export type PendingTextEdit = {
   worldPoint: Point;
@@ -25,7 +32,13 @@ interface CanvasState {
 
   addElement: (element: CanvasElement) => void;
 
-  updateElement: (elementId: string, updates: Partial<CanvasElement>) => void;
+  updateElement: (
+    elementId: string,
+
+    updates: Partial<CanvasElement>,
+
+    recordHistory?: boolean,
+  ) => void;
 
   removeElement: (elementId: string) => void;
 
@@ -38,9 +51,13 @@ interface CanvasState {
   selectElement: (elementId: string | null) => void;
 
   setPendingTextEdit: (edit: PendingTextEdit | null) => void;
+
+  undo: () => void;
+
+  redo: () => void;
 }
 
-export const useCanvasStore = create<CanvasState>((set) => ({
+export const useCanvasStore = create<CanvasState>((set, get) => ({
   elements: [],
 
   camera: {
@@ -62,61 +79,80 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       elements,
     }),
 
-  addElement: (element) =>
+  addElement: (element) => {
     set((state) => ({
       elements: [...state.elements, element],
-    })),
+    }));
 
-  updateElement: (elementId, updates) =>
+    useHistoryStore.getState().pushOperation({
+      type: "create",
+
+      element,
+    });
+  },
+
+  updateElement: (elementId, updates, recordHistory = true) => {
+    const element = get().elements.find((item) => item.id === elementId);
+
+    if (!element) {
+      return;
+    }
+
+    const before: Partial<CanvasElement> = {};
+
+    const after: Partial<CanvasElement> = {};
+
+    for (const key of Object.keys(updates) as Array<keyof CanvasElement>) {
+      before[key] = element[key] as never;
+
+      after[key] = updates[key] as never;
+    }
+
     set((state) => ({
-      elements: state.elements.map((element) => {
-        if (element.id !== elementId) {
-          return element;
+      elements: state.elements.map((item) => {
+        if (item.id !== elementId) {
+          return item;
         }
 
-        const updated = {
-          ...element,
+        return {
+          ...item,
           ...updates,
+
           updatedAt: Date.now(),
         } as CanvasElement;
-
-        const updatesRecord = updates as Record<string, unknown>;
-
-        // Auto-recalculate width & height for text elements when text is updated
-        if (updated.type === "text" && typeof updatesRecord.text === "string") {
-          const fontSize = updated.fontSize || 24;
-          const lines = updatesRecord.text.split("\n");
-          const maxLineLen = Math.max(...lines.map((l: string) => l.length), 1);
-          updated.width = Math.max(maxLineLen * fontSize * 0.6, 20);
-          updated.height = fontSize * 1.3 * Math.max(lines.length, 1);
-        }
-
-        // Shift points when x/y is moved on point-based elements
-        if (
-          typeof updates.x === "number" &&
-          typeof updates.y === "number" &&
-          "points" in element &&
-          element.points &&
-          !updatesRecord.points
-        ) {
-          const dx = updates.x - element.x;
-          const dy = updates.y - element.y;
-          if (dx !== 0 || dy !== 0) {
-            (updated as LineElement).points = element.points.map((p) => ({
-              x: p.x + dx,
-              y: p.y + dy,
-            }));
-          }
-        }
-
-        return updated;
       }),
-    })),
+    }));
 
-  removeElement: (elementId) =>
+    if (recordHistory) {
+      useHistoryStore.getState().pushOperation({
+        type: "update",
+
+        elementId,
+
+        before,
+
+        after,
+      });
+    }
+  },
+
+  removeElement: (elementId) => {
+    const element = get().elements.find((item) => item.id === elementId);
+
+    if (!element) {
+      return;
+    }
+
     set((state) => ({
-      elements: state.elements.filter((element) => element.id !== elementId),
-    })),
+      elements: state.elements.filter((item) => item.id !== elementId),
+    }));
+
+    useHistoryStore.getState().pushOperation({
+      type: "delete",
+
+      element,
+    });
+  },
 
   setCamera: (camera) =>
     set({
@@ -142,4 +178,30 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     set({
       pendingTextEdit,
     }),
+
+  undo: () => {
+    const operation = useHistoryStore.getState().undo();
+
+    if (!operation) {
+      return;
+    }
+
+    const reverse = reverseOperation(operation);
+
+    set((state) => ({
+      elements: applyOperation(state.elements, reverse),
+    }));
+  },
+
+  redo: () => {
+    const operation = useHistoryStore.getState().redo();
+
+    if (!operation) {
+      return;
+    }
+
+    set((state) => ({
+      elements: applyOperation(state.elements, operation),
+    }));
+  },
 }));

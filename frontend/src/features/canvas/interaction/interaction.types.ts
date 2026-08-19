@@ -13,11 +13,14 @@ export type InteractionState =
     }
   | {
       type: "dragging";
+
       elementId: string;
 
       mouseStart: Point;
 
       elementStart: Point;
+
+      lastPosition: Point;
     }
   | {
       type: "panning";
@@ -30,9 +33,8 @@ export type InteractionState =
         zoom: number;
       };
     }
+  | {
+      type: "text";
 
-    | {
-    type: "text";
-
-    position: Point;
-  }
+      position: Point;
+    };

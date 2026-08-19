@@ -38,6 +38,8 @@ const TOOLS: { tool: Tool; label: string }[] = [
 export default function CanvasToolbar() {
   const activeTool = useCanvasStore((state) => state.activeTool);
   const setActiveTool = useCanvasStore((state) => state.setActiveTool);
+  const undo = useCanvasStore((state) => state.undo);
+  const redo = useCanvasStore((state) => state.redo);
 
   return (
     <div
@@ -55,6 +57,21 @@ export default function CanvasToolbar() {
           onSelect={setActiveTool}
         />
       ))}
+      <div className="mx-1 my-auto h-5 w-[1px] bg-slate-200" />
+      <button
+        type="button"
+        onClick={() => undo()}
+        className="rounded bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200"
+      >
+        Undo
+      </button>
+      <button
+        type="button"
+        onClick={() => redo()}
+        className="rounded bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200"
+      >
+        Redo
+      </button>
     </div>
   );
 }
