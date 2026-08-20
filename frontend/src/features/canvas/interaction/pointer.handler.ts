@@ -552,31 +552,29 @@ export const useCanvasPointerHandlers = () => {
 
     const { camera, setCamera } = getState();
 
-    const canvas = event.currentTarget;
+    if (event.ctrlKey) {
+      const canvas = event.currentTarget;
+      const rect = canvas.getBoundingClientRect();
+      const mouseScreen: Point = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      const mouseWorldBefore = screenToWorld(mouseScreen, camera);
+     
+      const delta = event.deltaY;
+      const zoomFactor = delta < 0 ? 1.08 : 1 / 1.08;
+      const newZoom = Math.min(Math.max(camera.zoom * zoomFactor, 0.05), 20);
+      const newCameraX = mouseWorldBefore.x - mouseScreen.x / newZoom;
+      const newCameraY = mouseWorldBefore.y - mouseScreen.y / newZoom;
+      setCamera({ x: newCameraX, y: newCameraY, zoom: newZoom });
+    } else {
 
-    const rect = canvas.getBoundingClientRect();
-
-    const mouseScreen: Point = {
-      x: event.clientX - rect.left,
-
-      y: event.clientY - rect.top,
-    };
-
-    const mouseWorldBefore = screenToWorld(mouseScreen, camera);
-
-    const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
-
-    const newZoom = Math.min(Math.max(camera.zoom * zoomFactor, 0.1), 5);
-
-    const newCameraX = mouseWorldBefore.x - mouseScreen.x / newZoom;
-
-    const newCameraY = mouseWorldBefore.y - mouseScreen.y / newZoom;
-
-    setCamera({
-      x: newCameraX,
-      y: newCameraY,
-      zoom: newZoom,
-    });
+      setCamera({
+        x: camera.x + event.deltaX / camera.zoom,
+        y: camera.y + event.deltaY / camera.zoom,
+        zoom: camera.zoom,
+      });
+    }
   };
 
   return {

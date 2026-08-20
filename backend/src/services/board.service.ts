@@ -9,6 +9,7 @@ interface CreateBoardData{
 interface UpdateBoardData{
     title?: string;
     description?: string;
+    elements?: unknown[];
 }
 
 // create a new board
@@ -24,12 +25,14 @@ export const createBoard = async ({title, description, ownerId}: CreateBoardData
 
 }
 
-// get all boards for a user
+// get all boards for a user (elements excluded — too large for a list)
 export const getUserBoards = async (ownerId: string) => {
 
   return boardModel.find({
     ownerId,
-  }).sort({
+  })
+  .select('-elements')
+  .sort({
     updatedAt: -1,
   });
 };

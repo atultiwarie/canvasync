@@ -4,6 +4,7 @@ export interface IBoard extends Document {
     ownerId: mongoose.Types.ObjectId;
     title: string;
     description: string;
+    elements: mongoose.Schema.Types.Mixed[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -27,6 +28,10 @@ const boardSchema: Schema<IBoard>= new Schema<IBoard>(
             type:String,
             trim:true,
             maxlength:500
+        },
+        elements:{
+            type:[mongoose.Schema.Types.Mixed],
+            default:[]
         }
     },
     {timestamps:true});

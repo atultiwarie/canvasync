@@ -70,6 +70,18 @@ export default function CanvasBoard() {
     return () => window.removeEventListener("resize", sizeCanvas);
   }, []);
 
+  // Attach a native non-passive wheel listener so preventDefault() actually
+  // blocks the browser's default page scroll during canvas zoom.
+  // React's synthetic onWheel is passive by default and cannot prevent scroll.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (e: WheelEvent) => e.preventDefault();
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;

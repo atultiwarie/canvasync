@@ -27,4 +27,6 @@ export const updateBoardSchema = z.object({
     .trim()
     .max(500, "Description cannot exceed 500 characters")
     .optional(),
+
+  elements: z.array(z.any()).optional(),
 });
