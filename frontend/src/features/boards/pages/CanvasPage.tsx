@@ -49,7 +49,7 @@ function ZoomControls() {
         type="button"
         onClick={resetZoom}
         title="Reset zoom to 100%"
-        className="min-w-[4rem] rounded-lg px-2 py-1 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+        className="min-w-16 rounded-lg px-2 py-1 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-100"
       >
         {pct}%
       </button>
@@ -201,7 +201,7 @@ useEffect(() => {
               type="button"
               onClick={startEditing}
               title="Click to rename"
-              className="max-w-[14rem] truncate text-left text-sm font-semibold text-slate-800 transition hover:text-slate-500"
+              className="max-w-56 truncate text-left text-sm font-semibold text-slate-800 transition hover:text-slate-500"
             >
               {title}
             </button>

@@ -185,7 +185,7 @@ export default function RegisterPage() {
                       />
                     ))}
                   </div>
-                  <span className="min-w-[2.5rem] text-right text-xs text-slate-500">
+                  <span className="min-w-10 text-right text-xs text-slate-500">
                     {strengthLabel}
                   </span>
                 </div>
