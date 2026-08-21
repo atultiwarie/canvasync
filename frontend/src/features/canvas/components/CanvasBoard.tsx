@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import type { CanvasElement } from "../types/canvas.types";
+
 import {
   clearCanvas,
   renderElements,
@@ -20,6 +22,8 @@ import { useCanvasStore } from "../state/canvas.store";
 import { worldToScreen, screenToWorld } from "../engine/coordinates";
 
 import { findElementAtPoint } from "../engine/hitTest";
+
+import { socketEmitters } from "../../boards/pages/CanvasPage";
 
 export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -70,9 +74,7 @@ export default function CanvasBoard() {
     return () => window.removeEventListener("resize", sizeCanvas);
   }, []);
 
-  // Attach a native non-passive wheel listener so preventDefault() actually
-  // blocks the browser's default page scroll during canvas zoom.
-  // React's synthetic onWheel is passive by default and cannot prevent scroll.
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -171,10 +173,12 @@ export default function CanvasBoard() {
           onSubmit={(text) => {
             if (pendingTextEdit.elementId) {
               updateElement(pendingTextEdit.elementId, { text } as Parameters<typeof updateElement>[1]);
+              socketEmitters.emitUpdate(pendingTextEdit.elementId, { text } as Partial<CanvasElement>);
             } else {
               const newEl = createTextElement(pendingTextEdit.worldPoint, text);
               addElement(newEl);
               selectElement(newEl.id);
+              socketEmitters.emitAdd(newEl);
             }
             setPendingTextEdit(null);
           }}

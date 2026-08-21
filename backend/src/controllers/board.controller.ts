@@ -90,8 +90,7 @@ export const getOne = async (req: Request, res: Response) : Promise<void> => {
             return;
         }
         const board = await getBoardById(
-            req.params.boardId as string,
-            userId
+            req.params.boardId as string
         )
         res.status(200).json({
             success: true,
@@ -122,7 +121,6 @@ export const update = async (req: Request, res: Response) : Promise<void> => {
         }
         const board = await updateBoard(
             req.params.boardId as string,
-            userId,
             req.body
         )
         res.status(200).json({

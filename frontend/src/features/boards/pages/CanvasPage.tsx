@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, useId } from "react";
+import { useEffect, useRef, useState, useId, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCanvasStore } from "../../canvas/state/canvas.store";
 import { boardService } from "../board.service";
 import CanvasBoard from "../../canvas/components/CanvasBoard";
 import CanvasToolbar from "../../canvas/components/CanvasToolbar";
+import RemoteCursors from "../../canvas/components/RemoteCursors";
 import UserMenu from "../../auth/components/UserMenu";
+import { useSocket, type RemoteCursor } from "../../canvas/hooks/useSocket";
 import type { CanvasElement } from "../../canvas/types/canvas.types";
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -14,16 +16,9 @@ function ZoomControls() {
   const setCamera = useCanvasStore((s) => s.setCamera);
 
   const step = 1.25;
-
-  const zoomIn = () =>
-    setCamera({ ...camera, zoom: Math.min(camera.zoom * step, 20) });
-
-  const zoomOut = () =>
-    setCamera({ ...camera, zoom: Math.max(camera.zoom / step, 0.05) });
-
-  const resetZoom = () =>
-    setCamera({ x: 0, y: 0, zoom: 1 });
-
+  const zoomIn  = () => setCamera({ ...camera, zoom: Math.min(camera.zoom * step, 20) });
+  const zoomOut = () => setCamera({ ...camera, zoom: Math.max(camera.zoom / step, 0.05) });
+  const resetZoom = () => setCamera({ x: 0, y: 0, zoom: 1 });
   const pct = Math.round(camera.zoom * 100);
 
   return (
@@ -31,11 +26,9 @@ function ZoomControls() {
       className="fixed bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-1 py-1 shadow-md"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Zoom out */}
       <button
-        type="button"
-        onClick={zoomOut}
-        title="Zoom out  (Ctrl + scroll)"
+        type="button" onClick={zoomOut}
+        title="Zoom out (Ctrl + scroll)"
         className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 disabled:opacity-30"
         disabled={camera.zoom <= 0.05}
       >
@@ -44,21 +37,17 @@ function ZoomControls() {
         </svg>
       </button>
 
-      {/* Zoom % — click to reset */}
       <button
-        type="button"
-        onClick={resetZoom}
+        type="button" onClick={resetZoom}
         title="Reset zoom to 100%"
         className="min-w-16 rounded-lg px-2 py-1 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-100"
       >
         {pct}%
       </button>
 
-      {/* Zoom in */}
       <button
-        type="button"
-        onClick={zoomIn}
-        title="Zoom in  (Ctrl + scroll)"
+        type="button" onClick={zoomIn}
+        title="Zoom in (Ctrl + scroll)"
         className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 disabled:opacity-30"
         disabled={camera.zoom >= 20}
       >
@@ -71,8 +60,6 @@ function ZoomControls() {
   );
 }
 
-// type SaveStatus = "idle" | "saving" | "saved" | "error";
-
 export default function CanvasPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
@@ -84,12 +71,27 @@ export default function CanvasPage() {
   const [title, setTitle] = useState("Untitled");
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
-  // const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMounted = useRef(true);
+  const [remoteCursors, setRemoteCursors] = useState<Map<string, RemoteCursor>>(new Map());
+  const onCursorUpdate = useCallback((cursors: Map<string, RemoteCursor>) => {
+    setRemoteCursors(cursors);
+  }, []);
+
+  const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMounted   = useRef(true);
   const isInitialLoad = useRef(true);
+
+    const { emitAdd, emitUpdate, emitDelete, emitCursor } = useSocket(
+    boardId ?? "",
+    onCursorUpdate
+  );
+
+  useEffect(() => {
+    socketEmitters.emitAdd    = emitAdd;
+    socketEmitters.emitUpdate = emitUpdate;
+    socketEmitters.emitDelete = emitDelete;
+    socketEmitters.emitCursor = emitCursor;
+  }, [emitAdd, emitUpdate, emitDelete, emitCursor]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -109,31 +111,25 @@ export default function CanvasPage() {
     return () => {
       isMounted.current = false;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      if (statusTimer.current) clearTimeout(statusTimer.current);
     };
   }, [boardId]);
 
-
-useEffect(() => {
-  if (isInitialLoad.current || !boardId) return;
-  if (saveTimer.current) clearTimeout(saveTimer.current);
- 
-  saveTimer.current = setTimeout(async () => {
-    try {
-      await boardService.saveElements(boardId, elements);
-    } catch {
-      /* silent fail */
-    }
-  }, AUTOSAVE_DELAY_MS);
-  return () => {
+  useEffect(() => {
+    if (isInitialLoad.current || !boardId) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-  };
-}, [elements, boardId]);
 
-  const startEditing = () => {
-    setDraftTitle(title);
-    setEditingTitle(true);
-  };
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await boardService.saveElements(boardId, elements);
+      } catch {
+        /* silent fail — socket sync keeps collaborators live */
+      }
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [elements, boardId]);
+
+  const startEditing = () => { setDraftTitle(title); setEditingTitle(true); };
 
   const commitRename = async () => {
     setEditingTitle(false);
@@ -142,34 +138,22 @@ useEffect(() => {
     try {
       const updated = await boardService.updateMeta(boardId, { title: trimmed });
       setTitle(updated.title);
-    } catch {
-    }
+    } catch { /* silent */ }
   };
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+    if (e.key === "Enter")  { e.preventDefault(); commitRename(); }
     if (e.key === "Escape") { setEditingTitle(false); }
   };
-
-  // const statusNode = (() => {
-  //   if (saveStatus === "saving")
-  //     return <span className="text-slate-400">Saving…</span>;
-  //   if (saveStatus === "saved")
-  //     return <span className="text-green-500">Saved</span>;
-  //   if (saveStatus === "error")
-  //     return <span className="text-red-400">Save failed</span>;
-  //   return null;
-  // })();
 
   return (
     <div className="h-screen w-screen overflow-hidden">
 
-      {/* ── Left strip: back + title + save status ── */}
+      {/* ── Left strip: back + title ── */}
       <div
         className="fixed left-4 top-4 z-20 flex items-center gap-2"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Back */}
         <button
           id="back-to-boards-btn"
           type="button"
@@ -181,10 +165,8 @@ useEffect(() => {
           </svg>
         </button>
 
-        {/* Divider */}
         <div className="h-5 w-px bg-slate-200" />
 
-        {/* Title + save status */}
         <div className="flex flex-col gap-0.5">
           {editingTitle ? (
             <input
@@ -206,16 +188,21 @@ useEffect(() => {
               {title}
             </button>
           )}
-          {/* <span className="text-[10px] leading-none">
-            {statusNode}
-          </span> */}
         </div>
       </div>
 
       <CanvasBoard />
+      <RemoteCursors cursors={remoteCursors} />
       <CanvasToolbar />
       <ZoomControls />
       <UserMenu />
     </div>
   );
 }
+
+export const socketEmitters = {
+  emitAdd:    (_el: CanvasElement) => {},
+  emitUpdate: (_id: string, _updates: Partial<CanvasElement>) => {},
+  emitDelete: (_id: string) => {},
+  emitCursor: (_x: number, _y: number) => {},
+};

@@ -20,6 +20,8 @@ export type InteractionState =
 
       elementStart: Point;
 
+      startPoints?: Point[] | null;
+
       lastPosition: Point;
     }
   | {

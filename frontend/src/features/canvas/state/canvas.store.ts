@@ -9,6 +9,8 @@ import {
   reverseOperation,
 } from "../history/operation.executor";
 
+import { socketEmitters } from "../../boards/pages/CanvasPage";
+
 export type PendingTextEdit = {
   worldPoint: Point;
   elementId?: string;
@@ -160,6 +162,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
       element,
     });
+
+    socketEmitters.emitDelete(elementId);
   },
 
   setCamera: (camera) =>
@@ -199,6 +203,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((state) => ({
       elements: applyOperation(state.elements, reverse),
     }));
+
+    if (reverse.type === "create") {
+      socketEmitters.emitAdd(reverse.element);
+    } else if (reverse.type === "delete") {
+      socketEmitters.emitDelete(reverse.element.id);
+    } else if (reverse.type === "update") {
+      socketEmitters.emitUpdate(reverse.elementId, reverse.after);
+    }
   },
 
   redo: () => {
@@ -211,5 +223,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((state) => ({
       elements: applyOperation(state.elements, operation),
     }));
+
+    if (operation.type === "create") {
+      socketEmitters.emitAdd(operation.element);
+    } else if (operation.type === "delete") {
+      socketEmitters.emitDelete(operation.element.id);
+    } else if (operation.type === "update") {
+      socketEmitters.emitUpdate(operation.elementId, operation.after);
+    }
   },
 }));

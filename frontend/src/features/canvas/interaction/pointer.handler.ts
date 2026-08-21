@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { PointerEvent, WheelEvent } from "react";
 
 import { screenToWorld } from "../engine/coordinates";
+import { socketEmitters } from "../../boards/pages/CanvasPage";
 import {
   createArrowElement,
   createEllipseElement,
@@ -170,6 +171,7 @@ export const useCanvasPointerHandlers = () => {
           x: element.x,
           y: element.y,
         },
+        startPoints: "points" in element && element.points ? [...element.points] : null,
         lastPosition: {
           x: element.x,
           y: element.y,
@@ -231,6 +233,11 @@ export const useCanvasPointerHandlers = () => {
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
     const { camera, setCamera, updateElement, setDraftElement } = getState();
 
+    // Broadcast cursor position unconditionally on every pointer move
+    const moveScreenPoint = getScreenPoint(event);
+    const moveWorldPoint = screenToWorld(moveScreenPoint, camera);
+    socketEmitters.emitCursor(moveWorldPoint.x, moveWorldPoint.y);
+
     const state = interaction.current;
 
     const selectionState = selectionInteraction.current;
@@ -261,6 +268,7 @@ export const useCanvasPointerHandlers = () => {
       const rotation = state.startRotation + (currentAngle - startAngle);
 
       getState().updateElement(state.elementId, { rotation }, false);
+      socketEmitters.emitUpdate(state.elementId, { rotation });
 
       return;
     }
@@ -300,6 +308,11 @@ export const useCanvasPointerHandlers = () => {
         false,
       );
 
+      socketEmitters.emitUpdate(
+        selectionState.elementId,
+        updates as Partial<import("../types/canvas.types").CanvasElement>,
+      );
+
       return;
     }
 
@@ -335,13 +348,28 @@ export const useCanvasPointerHandlers = () => {
       const newX = state.elementStart.x + deltaX;
       const newY = state.elementStart.y + deltaY;
 
+      const updates: Record<string, unknown> = {
+        x: newX,
+        y: newY,
+      };
+
+      if (state.startPoints) {
+        updates.points = state.startPoints.map((p) => ({
+          x: p.x + deltaX,
+          y: p.y + deltaY,
+        }));
+      }
+
       updateElement(
         state.elementId,
-        {
-          x: newX,
-          y: newY,
-        },
+        updates as Partial<import("../types/canvas.types").CanvasElement>,
         false,
+      );
+
+      // Broadcast live drag position (and points) to collaborators
+      socketEmitters.emitUpdate(
+        state.elementId,
+        updates as Partial<import("../types/canvas.types").CanvasElement>,
       );
 
       state.lastPosition = {
@@ -408,6 +436,12 @@ export const useCanvasPointerHandlers = () => {
             ...(("points" in element) ? { points: element.points } : {}),
           },
         });
+        // Broadcast final resize to collaborators (including points if present)
+        socketEmitters.emitUpdate(s.elementId, {
+          x: element.x, y: element.y,
+          width: element.width, height: element.height,
+          ...("points" in element ? { points: element.points } : {}),
+        });
       }
 
       releasePointerCapture(event);
@@ -431,6 +465,8 @@ export const useCanvasPointerHandlers = () => {
           before: { rotation: s.startRotation },
           after: { rotation: element.rotation },
         });
+        // Broadcast final rotation
+        socketEmitters.emitUpdate(s.elementId, { rotation: element.rotation });
       }
 
       releasePointerCapture(event);
@@ -467,18 +503,30 @@ export const useCanvasPointerHandlers = () => {
       const movedY = state.lastPosition.y !== state.elementStart.y;
 
       if (movedX || movedY) {
+        const currentElement = getState().elements.find((el) => el.id === state.elementId);
         useHistoryStore.getState().pushOperation({
           type: "update",
           elementId: state.elementId,
           before: {
             x: state.elementStart.x,
             y: state.elementStart.y,
+            ...(state.startPoints ? { points: state.startPoints } : {}),
           },
           after: {
             x: state.lastPosition.x,
             y: state.lastPosition.y,
+            ...(currentElement && "points" in currentElement ? { points: currentElement.points } : {}),
           },
         });
+
+        // Broadcast final drag position & points to collaborators
+        if (currentElement) {
+          socketEmitters.emitUpdate(state.elementId, {
+            x: state.lastPosition.x,
+            y: state.lastPosition.y,
+            ...("points" in currentElement ? { points: currentElement.points } : {}),
+          });
+        }
       }
 
       releasePointerCapture(event);
@@ -524,6 +572,8 @@ export const useCanvasPointerHandlers = () => {
           addElement(element);
           getState().selectElement(element.id);
           getState().setActiveTool("select");
+          // Broadcast new element to collaborators
+          socketEmitters.emitAdd(element);
         }
       }
 

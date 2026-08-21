@@ -37,36 +37,28 @@ export const getUserBoards = async (ownerId: string) => {
   });
 };
 
-// get a board by id
+// get a board by id (allows collaborators to view any board by link)
 export const getBoardById = async (
-    boardId: string,
-    ownerId: string
+    boardId: string
 )=>{
-    const board = await boardModel.findOne({
-        _id: boardId,
-        ownerId
-    });
+    const board = await boardModel.findById(boardId);
     if(!board){
         throw new Error("Board not found");
     }
     return board;
 }
 
-// update a board by id
+// update a board by id (allows collaborators to save edits)
 export const updateBoard = async (
     boardId: string,
-    ownerId: string,
     data: UpdateBoardData
 )=>{
-    const board = await boardModel.findOneAndUpdate(
-        {
-            _id: boardId,
-            ownerId
-        },
+    const board = await boardModel.findByIdAndUpdate(
+        boardId,
         data,
         {
-            new:true,
-            runValidators:true
+            new: true,
+            runValidators: true
         }
     );
     if(!board){
