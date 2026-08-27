@@ -25,6 +25,21 @@ function scheduleFlush(boardId: string, elements: unknown[]) {
   pendingFlushes.set(boardId, timer);
 }
 
+// Check if a user can mutate elements on a board (owner or editor)
+async function canEdit(boardId: string, userId: string): Promise<boolean> {
+  const board = await boardModel
+    .findById(boardId)
+    .select("ownerId collaborators");
+  if (!board) return false;
+
+  if (board.ownerId.toString() === userId) return true;
+
+  const collab = board.collaborators.find(
+    (c) => c.userId.toString() === userId
+  );
+  return collab?.role === "editor";
+}
+
 export function registerSocketHandlers(io: Server) {
   io.use(socketAuthMiddleware);
 
@@ -33,6 +48,7 @@ export function registerSocketHandlers(io: Server) {
 
     console.log(`[socket] connected: ${name} (${userId}) — socket ${socket.id}`);
 
+ 
     socket.on("join-board", async ({ boardId }: { boardId: string }) => {
       if (!boardId) return;
 
@@ -45,20 +61,41 @@ export function registerSocketHandlers(io: Server) {
       await socket.join(boardId);
       console.log(`[socket] ${name} joined board ${boardId}`);
 
-      socket.emit("board-state", { elements: board.elements ?? [] });
+      // Tell the joining client the current elements and their own role
+      const isOwner = board.ownerId.toString() === userId;
+      const collab = board.collaborators.find(
+        (c) => c.userId.toString() === userId
+      );
+      const role = isOwner ? "owner" : collab?.role ?? "viewer";
+
+      socket.emit("board-state", {
+        elements: board.elements ?? [],
+        role,          // ← frontend uses this to lock down the UI
+      });
       socket.to(boardId).emit("user-joined", { userId, name });
     });
 
+
     socket.on(
       "element-add",
-      ({ boardId, element }: { boardId: string; element: CanvasElementPayload }) => {
+      async ({
+        boardId,
+        element,
+      }: {
+        boardId: string;
+        element: CanvasElementPayload;
+      }) => {
+        if (!(await canEdit(boardId, userId))) {
+          socket.emit("error", { message: "Viewers cannot add elements" });
+          return;
+        }
         socket.to(boardId).emit("element-added", { element, userId, name });
       }
     );
 
     socket.on(
       "element-update",
-      ({
+      async ({
         boardId,
         elementId,
         updates,
@@ -67,16 +104,31 @@ export function registerSocketHandlers(io: Server) {
         elementId: string;
         updates: Partial<CanvasElementPayload>;
       }) => {
+        if (!(await canEdit(boardId, userId))) {
+          socket.emit("error", { message: "Viewers cannot update elements" });
+          return;
+        }
         socket.to(boardId).emit("element-updated", { elementId, updates, userId });
       }
     );
 
     socket.on(
       "element-delete",
-      ({ boardId, elementId }: { boardId: string; elementId: string }) => {
+      async ({
+        boardId,
+        elementId,
+      }: {
+        boardId: string;
+        elementId: string;
+      }) => {
+        if (!(await canEdit(boardId, userId))) {
+          socket.emit("error", { message: "Viewers cannot delete elements" });
+          return;
+        }
         socket.to(boardId).emit("element-deleted", { elementId, userId });
       }
     );
+
 
     socket.on(
       "cursor-move",
@@ -87,7 +139,14 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on(
       "board-save",
-      ({ boardId, elements }: { boardId: string; elements: unknown[] }) => {
+      async ({
+        boardId,
+        elements,
+      }: {
+        boardId: string;
+        elements: unknown[];
+      }) => {
+        if (!(await canEdit(boardId, userId))) return;
         scheduleFlush(boardId, elements);
       }
     );
@@ -96,6 +155,7 @@ export function registerSocketHandlers(io: Server) {
       socket.leave(boardId);
       socket.to(boardId).emit("user-left", { userId, name });
     });
+
     socket.on("disconnect", () => {
       console.log(`[socket] disconnected: ${name} (${userId})`);
       socket.rooms.forEach((room) => {

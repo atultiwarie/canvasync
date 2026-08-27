@@ -25,7 +25,11 @@ import { findElementAtPoint } from "../engine/hitTest";
 
 import { socketEmitters } from "../../boards/pages/CanvasPage";
 
-export default function CanvasBoard() {
+interface CanvasBoardProps {
+  readOnly?: boolean;
+}
+
+export default function CanvasBoard({ readOnly = false }: CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
@@ -38,7 +42,9 @@ export default function CanvasBoard() {
   const updateElement = useCanvasStore((state) => state.updateElement);
   const selectElement = useCanvasStore((state) => state.selectElement);
   const pendingTextEdit = useCanvasStore((state) => state.pendingTextEdit);
-  const setPendingTextEdit = useCanvasStore((state) => state.setPendingTextEdit);
+  const setPendingTextEdit = useCanvasStore(
+    (state) => state.setPendingTextEdit,
+  );
 
   const {
     handlePointerDown,
@@ -74,7 +80,6 @@ export default function CanvasBoard() {
     return () => window.removeEventListener("resize", sizeCanvas);
   }, []);
 
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -97,7 +102,9 @@ export default function CanvasBoard() {
     renderElements(ctx, elementsToRender, camera, draftElement);
 
     if (selectedElementId) {
-      const selectedElement = elements.find((el) => el.id === selectedElementId);
+      const selectedElement = elements.find(
+        (el) => el.id === selectedElementId,
+      );
       if (selectedElement) {
         renderSelection(ctx, selectedElement, camera);
       }
@@ -148,18 +155,20 @@ export default function CanvasBoard() {
       <canvas
         ref={canvasRef}
         className={`fixed inset-0 z-0 bg-white ${
-          activeTool === "hand"
-            ? "cursor-grab"
-            : activeTool === "text"
-              ? "cursor-text"
-              : "cursor-crosshair"
+          readOnly
+            ? "cursor-default"
+            : activeTool === "hand"
+              ? "cursor-grab"
+              : activeTool === "text"
+                ? "cursor-text"
+                : "cursor-crosshair"
         }`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
+        onPointerDown={readOnly ? undefined : handlePointerDown}
+        onPointerMove={readOnly ? undefined : handlePointerMove}
+        onPointerUp={readOnly ? undefined : handlePointerUp}
+        onPointerCancel={readOnly ? undefined : handlePointerCancel}
         onWheel={handleWheel}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={readOnly ? undefined : handleDoubleClick}
       />
 
       {/* <PropertiesPanel /> */}
@@ -172,8 +181,12 @@ export default function CanvasBoard() {
           zoom={camera.zoom}
           onSubmit={(text) => {
             if (pendingTextEdit.elementId) {
-              updateElement(pendingTextEdit.elementId, { text } as Parameters<typeof updateElement>[1]);
-              socketEmitters.emitUpdate(pendingTextEdit.elementId, { text } as Partial<CanvasElement>);
+              updateElement(pendingTextEdit.elementId, { text } as Parameters<
+                typeof updateElement
+              >[1]);
+              socketEmitters.emitUpdate(pendingTextEdit.elementId, {
+                text,
+              } as Partial<CanvasElement>);
             } else {
               const newEl = createTextElement(pendingTextEdit.worldPoint, text);
               addElement(newEl);

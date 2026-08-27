@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, useId, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCanvasStore } from "../../canvas/state/canvas.store";
-import { boardService } from "../board.service";
+import { boardService, type Board } from "../board.service";
 import CanvasBoard from "../../canvas/components/CanvasBoard";
 import CanvasToolbar from "../../canvas/components/CanvasToolbar";
 import RemoteCursors from "../../canvas/components/RemoteCursors";
+import ShareModal from "../../canvas/components/ShareModal";
 import UserMenu from "../../auth/components/UserMenu";
-import { useSocket, type RemoteCursor } from "../../canvas/hooks/useSocket";
+import { useSocket, type RemoteCursor, type BoardRole } from "../../canvas/hooks/useSocket";
 import type { CanvasElement } from "../../canvas/types/canvas.types";
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -72,18 +73,31 @@ export default function CanvasPage() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
 
+  // Phase 4 state
+  const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  // Role — starts as 'owner' (optimistic), corrected by socket board-state event
+  const [role, setRole] = useState<BoardRole>("owner");
+  const readOnly = role === "viewer";
+
   const [remoteCursors, setRemoteCursors] = useState<Map<string, RemoteCursor>>(new Map());
   const onCursorUpdate = useCallback((cursors: Map<string, RemoteCursor>) => {
     setRemoteCursors(cursors);
+  }, []);
+
+  const onRoleReceived = useCallback((r: BoardRole) => {
+    setRole(r);
   }, []);
 
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted   = useRef(true);
   const isInitialLoad = useRef(true);
 
-    const { emitAdd, emitUpdate, emitDelete, emitCursor } = useSocket(
+  const { emitAdd, emitUpdate, emitDelete, emitCursor } = useSocket(
     boardId ?? "",
-    onCursorUpdate
+    onCursorUpdate,
+    onRoleReceived          // ← new: receives role from board-state socket event
   );
 
   useEffect(() => {
@@ -102,6 +116,7 @@ export default function CanvasPage() {
       .get(boardId)
       .then((board) => {
         if (!isMounted.current) return;
+        setCurrentBoard(board);
         setTitle(board.title);
         loadElements((board.elements ?? []) as CanvasElement[]);
         setTimeout(() => { isInitialLoad.current = false; }, 0);
@@ -114,20 +129,21 @@ export default function CanvasPage() {
     };
   }, [boardId]);
 
+  // Auto-save — skipped entirely for viewers
   useEffect(() => {
-    if (isInitialLoad.current || !boardId) return;
+    if (isInitialLoad.current || !boardId || readOnly) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     saveTimer.current = setTimeout(async () => {
       try {
         await boardService.saveElements(boardId, elements);
       } catch {
-        /* silent fail — socket sync keeps collaborators live */
+        /* silent — socket keeps collaborators live */
       }
     }, AUTOSAVE_DELAY_MS);
 
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [elements, boardId]);
+  }, [elements, boardId, readOnly]);
 
   const startEditing = () => { setDraftTitle(title); setEditingTitle(true); };
 
@@ -138,6 +154,7 @@ export default function CanvasPage() {
     try {
       const updated = await boardService.updateMeta(boardId, { title: trimmed });
       setTitle(updated.title);
+      setCurrentBoard((prev) => prev ? { ...prev, title: updated.title } : prev);
     } catch { /* silent */ }
   };
 
@@ -149,7 +166,7 @@ export default function CanvasPage() {
   return (
     <div className="h-screen w-screen overflow-hidden">
 
-      {/* ── Left strip: back + title ── */}
+      {/* ── Left strip: back + title + share ── */}
       <div
         className="fixed left-4 top-4 z-20 flex items-center gap-2"
         onPointerDown={(e) => e.stopPropagation()}
@@ -168,7 +185,7 @@ export default function CanvasPage() {
         <div className="h-5 w-px bg-slate-200" />
 
         <div className="flex flex-col gap-0.5">
-          {editingTitle ? (
+          {editingTitle && !readOnly ? (
             <input
               id={titleInputId}
               autoFocus
@@ -181,21 +198,58 @@ export default function CanvasPage() {
           ) : (
             <button
               type="button"
-              onClick={startEditing}
-              title="Click to rename"
-              className="max-w-56 truncate text-left text-sm font-semibold text-slate-800 transition hover:text-slate-500"
+              onClick={!readOnly ? startEditing : undefined}
+              title={readOnly ? "View only" : "Click to rename"}
+              className={`max-w-56 truncate text-left text-sm font-semibold text-slate-800 transition ${readOnly ? "cursor-default" : "hover:text-slate-500"}`}
             >
               {title}
             </button>
           )}
         </div>
+
+        {/* Share button — only for editors/owners */}
+        {!readOnly && (
+          <>
+            <div className="h-5 w-px bg-slate-200" />
+            <button
+              type="button"
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <svg
+                className="h-3.5 w-3.5 text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Share
+            </button>
+          </>
+        )}
       </div>
 
-      <CanvasBoard />
+      {/* Canvas — pointer events blocked for viewers on drawing tools */}
+      <CanvasBoard readOnly={readOnly} />
       <RemoteCursors cursors={remoteCursors} />
-      <CanvasToolbar />
+      <CanvasToolbar readOnly={readOnly} />
       <ZoomControls />
       <UserMenu />
+
+      {/* Share Modal */}
+      {currentBoard && !readOnly && (
+        <ShareModal
+          board={currentBoard}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 }

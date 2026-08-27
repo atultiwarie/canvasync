@@ -5,6 +5,7 @@ import LoginPage from "./features/auth/pages/LoginPage";
 import RegisterPage from "./features/auth/pages/RegisterPage";
 import BoardsPage from "./features/boards/pages/BoardsPage";
 import CanvasPage from "./features/boards/pages/CanvasPage";
+import JoinBoardPage from "./features/boards/pages/JoinBoardPage";
 
 function App() {
   return (
@@ -14,6 +15,9 @@ function App() {
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
+          {/* Phase 4: invite link handler — public entry point, handles auth redirect internally */}
+          <Route path="/join/:token" element={<JoinBoardPage />} />
 
           {/* Protected */}
           <Route

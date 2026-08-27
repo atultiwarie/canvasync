@@ -10,25 +10,35 @@ export interface RemoteCursor {
   y: number;
 }
 
+export type BoardRole = "owner" | "editor" | "viewer";
 
 export function useSocket(
   boardId: string,
-  onCursorUpdate: (cursors: Map<string, RemoteCursor>) => void
+  onCursorUpdate: (cursors: Map<string, RemoteCursor>) => void,
+  onRoleReceived?: (role: BoardRole) => void
 ) {
-  // const addElementRemote   = useCanvasStore((s) => s.addElement);
   const updateElementStore = useCanvasStore((s) => s.updateElement);
 
   const cursorsRef = useRef<Map<string, RemoteCursor>>(new Map());
-
   const lastCursorEmit = useRef(0);
 
   useEffect(() => {
     const socket = getSocket();
 
     socket.emit("join-board", { boardId });
-    const onBoardState = ({ elements }: { elements: CanvasElement[] }) => {
+
+    const onBoardState = ({
+      elements,
+      role,
+    }: {
+      elements: CanvasElement[];
+      role?: BoardRole;
+    }) => {
       useCanvasStore.getState().loadElements(elements);
+      // Notify CanvasPage of this user's role so it can lock the UI
+      if (role && onRoleReceived) onRoleReceived(role);
     };
+
     const onElementAdded = ({ element }: { element: CanvasElement }) => {
       useCanvasStore.setState((s) => ({
         elements: [...s.elements, element],
@@ -69,6 +79,7 @@ export function useSocket(
       cursorsRef.current.set(cursor.userId, cursor);
       onCursorUpdate(new Map(cursorsRef.current));
     };
+
     const onUserLeft = ({ userId }: { userId: string }) => {
       cursorsRef.current.delete(userId);
       onCursorUpdate(new Map(cursorsRef.current));
@@ -118,7 +129,7 @@ export function useSocket(
   const emitCursor = useCallback(
     (x: number, y: number) => {
       const now = Date.now();
-      if (now - lastCursorEmit.current < 33) return; // throttle to ~30fps
+      if (now - lastCursorEmit.current < 33) return; // throttle ~30fps
       lastCursorEmit.current = now;
       getSocket().emit("cursor-move", { boardId, x, y });
     },

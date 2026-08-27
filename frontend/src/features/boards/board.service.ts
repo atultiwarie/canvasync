@@ -1,13 +1,28 @@
 import { api } from "../../lib/api";
 import type { CanvasElement } from "../canvas/types/canvas.types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
+
+export interface BoardMember {
+  _id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
+export interface Collaborator {
+  userId: BoardMember;
+  role: "viewer" | "editor";
+  joinedAt: string;
+}
 
 export interface Board {
   _id: string;
   title: string;
   description?: string;
   elements: CanvasElement[];
+  ownerId: BoardMember | string;
+  collaborators?: Collaborator[];
   createdAt: string;
   updatedAt: string;
 }
@@ -17,7 +32,20 @@ export interface CreateBoardPayload {
   description?: string;
 }
 
-// ─── Service ──────────────────────────────────────────────────────────────────
+// Phase 4 types
+export interface CreateInviteResponse {
+  token: string;
+  role: "viewer" | "editor";
+  expiresAt: string | null;
+  inviteUrl: string;
+}
+
+export interface JoinBoardResponse {
+  boardId: string;
+  title: string;
+  role: "viewer" | "editor" | "owner";
+}
+
 
 export const boardService = {
   async list(): Promise<Board[]> {
@@ -49,5 +77,30 @@ export const boardService = {
 
   async delete(boardId: string): Promise<void> {
     await api.delete(`/api/boards/${boardId}`);
+  },
+
+  // ─── Phase 4 ───────────────────────────────────────────────────────────────
+
+  async createInvite(
+    boardId: string,
+    payload: {
+      role?: "viewer" | "editor";
+      expiresIn?: "1d" | "7d" | "30d" | "never";
+    } = {}
+  ): Promise<CreateInviteResponse> {
+    const { data } = await api.post(`/api/boards/${boardId}/invite`, {
+      role: payload.role ?? "editor",
+      expiresIn: payload.expiresIn ?? "7d",
+    });
+    return data.data;
+  },
+
+  async join(token: string): Promise<JoinBoardResponse> {
+    const { data } = await api.post(`/api/boards/join/${token}`);
+    return data.data;
+  },
+
+  async removeCollaborator(boardId: string, targetUserId: string): Promise<void> {
+    await api.delete(`/api/boards/${boardId}/collaborators/${targetUserId}`);
   },
 };
