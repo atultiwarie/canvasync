@@ -4,9 +4,9 @@ dotenv.config();
 const requredEnv = ["MONGO_URI", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"];
 
 for (const key of requredEnv) {
-    if (!process.env[key]) {
-        throw new Error(`Environment variable ${key} is not set`);
-    }
+  if (!process.env[key]) {
+    throw new Error(`Environment variable ${key} is not set`);
+  }
 }
 
 export const env = {
@@ -19,4 +19,6 @@ export const env = {
   refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
   refreshTokenExpiresInDays:
     Number(process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS) || 7,
+  // Phase 6 — AI (optional; if not set, summarize endpoint returns 503)
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
 };

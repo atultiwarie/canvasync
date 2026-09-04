@@ -12,10 +12,18 @@ interface ShareModalProps {
   onClose: () => void;
 }
 
-export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) {
+export default function ShareModal({
+  board,
+  isOpen,
+  onClose,
+}: ShareModalProps) {
   const [role, setRole] = useState<"editor" | "viewer">("editor");
-  const [expiresIn, setExpiresIn] = useState<"1d" | "7d" | "30d" | "never">("7d");
-  const [inviteData, setInviteData] = useState<CreateInviteResponse | null>(null);
+  const [expiresIn, setExpiresIn] = useState<"1d" | "7d" | "30d" | "never">(
+    "7d",
+  );
+  const [inviteData, setInviteData] = useState<CreateInviteResponse | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -25,7 +33,10 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
     setLoading(true);
     setError(null);
     try {
-      const res = await boardService.createInvite(board._id, { role, expiresIn });
+      const res = await boardService.createInvite(board._id, {
+        role,
+        expiresIn,
+      });
       setInviteData(res);
     } catch {
       setError("Failed to generate invite link. Please try again.");
@@ -93,12 +104,12 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-2xl">
         {/* ── Header ── */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
@@ -118,8 +129,12 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
               </svg>
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Share Board</h2>
-              <p className="max-w-xs truncate text-xs text-slate-500">{board.title}</p>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Share Board
+              </h2>
+              <p className="max-w-xs truncate text-xs text-slate-500">
+                {board.title}
+              </p>
             </div>
           </div>
           <button
@@ -133,7 +148,11 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
               stroke="currentColor"
               strokeWidth="2"
             >
-              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M18 6L6 18M6 6l12 12"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
         </div>
@@ -141,7 +160,9 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
         {/* ── Controls ── */}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-slate-600">Permissions</label>
+            <label className="text-xs font-medium text-slate-600">
+              Permissions
+            </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as "editor" | "viewer")}
@@ -152,7 +173,9 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600">Link Expiry</label>
+            <label className="text-xs font-medium text-slate-600">
+              Link Expiry
+            </label>
             <select
               value={expiresIn}
               onChange={(e) =>
@@ -170,7 +193,9 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
 
         {/* ── Invite Link ── */}
         <div className="mt-4">
-          <label className="text-xs font-medium text-slate-600">Invite Link</label>
+          <label className="text-xs font-medium text-slate-600">
+            Invite Link
+          </label>
           <div className="mt-1 flex items-center gap-2">
             <input
               readOnly
@@ -178,8 +203,8 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
                 loading
                   ? "Generating…"
                   : error
-                  ? ""
-                  : inviteData?.inviteUrl ?? ""
+                    ? ""
+                    : (inviteData?.inviteUrl ?? "")
               }
               placeholder={error ?? ""}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 outline-none"
@@ -202,7 +227,11 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
                     stroke="currentColor"
                     strokeWidth="2.5"
                   >
-                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path
+                      d="M20 6L9 17l-5-5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                   Copied!
                 </>
@@ -211,9 +240,7 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
               )}
             </button>
           </div>
-          {error && (
-            <p className="mt-1.5 text-xs text-red-600">{error}</p>
-          )}
+          {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
         </div>
 
         {/* ── QR Code ── */}
@@ -290,4 +317,3 @@ export default function ShareModal({ board, isOpen, onClose }: ShareModalProps) 
     </div>
   );
 }
-

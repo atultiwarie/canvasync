@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, useId, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCanvasStore } from "../../canvas/state/canvas.store";
-import { boardService, type Board } from "../board.service";
+
+import {
+  boardService,
+  type Board,
+  type AISummaryResult,
+} from "../board.service";
+
 import CanvasBoard from "../../canvas/components/CanvasBoard";
 import CanvasToolbar from "../../canvas/components/CanvasToolbar";
 import RemoteCursors from "../../canvas/components/RemoteCursors";
 import ShareModal from "../../canvas/components/ShareModal";
+import AISummaryDrawer from "../../canvas/components/AISummaryDrawer";
 import UserMenu from "../../auth/components/UserMenu";
 import {
   useSocket,
@@ -16,7 +23,9 @@ import type { CanvasElement } from "../../canvas/types/canvas.types";
 import {
   exportJSON,
   exportPNG,
-  exportSVG /*, importJSON*/,
+  exportSVG,
+  generateBoardPngBase64,
+  // importJSON,  // reserved for future import feature
 } from "../../canvas/engine/export.utils";
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -34,7 +43,7 @@ function ZoomControls() {
 
   return (
     <div
-      className="fixed bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-1 py-1 shadow-md"
+      className="fixed bottom-16 sm:bottom-4 left-3 sm:left-4 z-20 flex items-center gap-0.5 rounded-xl border border-slate-200/90 bg-white/95 px-1 py-1 shadow-md backdrop-blur-md"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button
@@ -57,7 +66,7 @@ function ZoomControls() {
       <button
         type="button"
         onClick={resetZoom}
-        className="min-w-16 rounded-lg px-2 py-1 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+        className="min-w-14 rounded-lg px-1.5 py-1 text-center text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-100"
       >
         {pct}%
       </button>
@@ -156,7 +165,7 @@ function ExportDropdown({
             strokeLinejoin="round"
           />
         </svg>
-        Export
+        <span className="hidden xl:inline">Export</span>
         <svg
           className={`h-3 w-3 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
           viewBox="0 0 24 24"
@@ -168,9 +177,9 @@ function ExportDropdown({
         </svg>
       </button>
 
-      {/* Dropdown panel — anchored below the button */}
+      {/* Dropdown panel — anchored below the button to the right */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
           {/* Export options */}
           <button
             disabled={elements.length === 0}
@@ -265,6 +274,36 @@ export default function CanvasPage() {
   );
   const onRoleReceived = useCallback((r: BoardRole) => setRole(r), []);
 
+  // ── Phase 6: AI Summary ───────────────────────────────────────────────────
+  type AiState = "idle" | "loading" | "success" | "error";
+  const [aiState, setAiState] = useState<AiState>("idle");
+  const [aiResult, setAiResult] = useState<AISummaryResult | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAISummarize = useCallback(async () => {
+    if (!boardId || elements.length === 0) return;
+    setAiState("loading");
+    setAiResult(null);
+    setAiError(null);
+    try {
+      const imageBase64 = generateBoardPngBase64(elements);
+      if (!imageBase64) throw new Error("Could not render board image.");
+      const result = await boardService.summarizeBoard(
+        boardId,
+        imageBase64,
+        title,
+      );
+      setAiResult(result);
+      setAiState("success");
+    } catch (err) {
+      setAiError(
+        err instanceof Error
+          ? err.message
+          : "AI summarization failed. Please try again.",
+      );
+      setAiState("error");
+    }
+  }, [boardId, elements, title]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(true);
   const isInitialLoad = useRef(true);
@@ -351,64 +390,71 @@ export default function CanvasPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden">
-      {/* ── Header bar ── */}
-      <div
-        className="fixed left-4 top-4 z-20 flex items-center gap-2"
+      {/* ── Top Header Bar (Split Left & Right Clusters) ── */}
+      <header
+        className="fixed left-0 right-0 top-0 z-20 flex h-14 items-center justify-between px-2.5 sm:px-4 pointer-events-none"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Back button */}
-        <button
-          type="button"
-          onClick={() => navigate("/boards")}
-          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          <svg
-            className="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Top-Left: Navigation & Board Title */}
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur-md">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={() => navigate("/boards")}
+            title="Back to boards"
+            className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 transition"
           >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-
-        <div className="h-5 w-px bg-slate-200" />
-
-        {/* Board title */}
-        <div className="flex flex-col gap-0.5">
-          {editingTitle && !readOnly ? (
-            <input
-              id={titleInputId}
-              autoFocus
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={handleTitleKeyDown}
-              className="w-40 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm font-semibold text-slate-900 outline-none focus:border-slate-900"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={!readOnly ? startEditing : undefined}
-              title={readOnly ? "View only" : "Click to rename"}
-              className={`max-w-56 truncate text-left text-sm font-semibold text-slate-800 ${readOnly ? "cursor-default" : "hover:text-slate-500"}`}
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {title}
-            </button>
-          )}
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+
+          <div className="h-4 w-px bg-slate-200" />
+
+          {/* Board title */}
+          <div className="flex items-center">
+            {editingTitle && !readOnly ? (
+              <input
+                id={titleInputId}
+                autoFocus
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={handleTitleKeyDown}
+                className="w-28 sm:w-40 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs sm:text-sm font-semibold text-slate-900 outline-none focus:border-slate-900"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={!readOnly ? startEditing : undefined}
+                title={readOnly ? "View only" : "Click to rename"}
+                className={`max-w-[100px] sm:max-w-44 truncate text-left text-xs sm:text-sm font-semibold text-slate-800 ${
+                  readOnly ? "cursor-default" : "hover:text-slate-500"
+                }`}
+              >
+                {title}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Share button — editors/owners only */}
-        {!readOnly && (
-          <>
-            <div className="h-5 w-px bg-slate-200" />
+        {/* Top-Right: Actions (Share, Export, AI, UserMenu) */}
+        <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-sm backdrop-blur-md">
+          {/* Share button — editors/owners only */}
+          {!readOnly && (
             <button
               type="button"
               onClick={() => setShowShareModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              title="Share board"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition"
             >
               <svg
                 className="h-3.5 w-3.5 text-slate-500"
@@ -423,27 +469,73 @@ export default function CanvasPage() {
                   strokeLinejoin="round"
                 />
               </svg>
-              Share
+              <span className="hidden xl:inline">Share</span>
             </button>
-          </>
-        )}
+          )}
 
-        {/* Export dropdown — always visible */}
-        <div className="h-5 w-px bg-slate-200" />
-        <ExportDropdown boardTitle={title} elements={elements} />
-      </div>
+          {/* Export dropdown */}
+          <ExportDropdown boardTitle={title} elements={elements} />
+
+          {/* AI Summary button */}
+          <button
+            type="button"
+            onClick={handleAISummarize}
+            disabled={elements.length === 0 || aiState === "loading"}
+            title="AI Board Summary"
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {aiState === "loading" ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600" />
+            ) : (
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+              >
+                <path
+                  d="M12 3v1M12 20v1M3 12h1M20 12h1M5.636 5.636l.707.707M17.657 17.657l.707.707M5.636 18.364l.707-.707M17.657 6.343l.707-.707"
+                  strokeLinecap="round"
+                />
+                <circle cx="12" cy="12" r="4" />
+              </svg>
+            )}
+            <span className="hidden xl:inline">
+              {aiState === "loading" ? "Analyzing…" : "AI Summary"}
+            </span>
+          </button>
+
+          <div className="mx-0.5 h-5 w-px bg-slate-200" />
+
+          {/* User Menu avatar rendered inline right here */}
+          <UserMenu className="relative" />
+        </div>
+      </header>
 
       <CanvasBoard readOnly={readOnly} />
       <RemoteCursors cursors={remoteCursors} />
       <CanvasToolbar readOnly={readOnly} />
       <ZoomControls />
-      <UserMenu />
 
       {currentBoard && !readOnly && (
         <ShareModal
           board={currentBoard}
           isOpen={showShareModal}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {/* AI Summary Drawer — slides in from the right */}
+      {(aiState === "loading" ||
+        aiState === "success" ||
+        aiState === "error") && (
+        <AISummaryDrawer
+          state={aiState}
+          result={aiResult}
+          error={aiError}
+          onClose={() => setAiState("idle")}
+          onRetry={handleAISummarize}
         />
       )}
     </div>

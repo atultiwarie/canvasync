@@ -131,7 +131,7 @@ export function importJSON(
 
         // Basic schema validation
         if (!raw || !Array.isArray(raw.elements)) {
-          throw new Error("Invalid CanvaSync file — missing elements array.");
+          throw new Error("Invalid CanvasSync file — missing elements array.");
         }
 
         resolve({
@@ -184,11 +184,6 @@ export function exportPNG(elements: CanvasElement[], boardTitle = "board") {
   const canvasW = (box.width + PADDING * 2) * SCALE;
   const canvasH = (box.height + PADDING * 2) * SCALE;
 
-  // Build the export camera:
-  //   worldToScreen(p, cam) = (p.x - cam.x) * cam.zoom
-  //   We want worldToScreen({x: box.minX, y: box.minY}) = (PADDING*SCALE, PADDING*SCALE)
-  //   → cam.x = box.minX - PADDING
-  //   → cam.y = box.minY - PADDING
   const exportCamera: Camera = {
     x: box.minX - PADDING,
     y: box.minY - PADDING,
@@ -202,15 +197,47 @@ export function exportPNG(elements: CanvasElement[], boardTitle = "board") {
   const ctx = offscreen.getContext("2d");
   if (!ctx) return;
 
-  // White background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  // Render all elements with no selection handles (renderElements never draws handles)
   renderElements(ctx, elements, exportCamera);
 
   const dataUrl = offscreen.toDataURL("image/png");
   downloadDataUrl(dataUrl, `${boardTitle.replace(/\s+/g, "_")}.png`);
+}
+
+export function generateBoardPngBase64(
+  elements: CanvasElement[],
+): string | null {
+  if (elements.length === 0) return null;
+
+  const PADDING = 40;
+  const SCALE = 1.5; // Slightly smaller than export to keep API payload lean
+
+  const box = getBoundingBox(elements);
+
+  const canvasW = (box.width + PADDING * 2) * SCALE;
+  const canvasH = (box.height + PADDING * 2) * SCALE;
+
+  const exportCamera: Camera = {
+    x: box.minX - PADDING,
+    y: box.minY - PADDING,
+    zoom: SCALE,
+  };
+
+  const offscreen = document.createElement("canvas");
+  offscreen.width = canvasW;
+  offscreen.height = canvasH;
+
+  const ctx = offscreen.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  renderElements(ctx, elements, exportCamera);
+
+  return offscreen.toDataURL("image/png");
 }
 
 // ─── 5.3  Export SVG ─────────────────────────────────────────────────────────

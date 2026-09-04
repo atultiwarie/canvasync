@@ -1,8 +1,6 @@
 import { useCanvasStore } from "../state/canvas.store";
 import type { CanvasElement } from "../types/canvas.types";
 
-
-
 const STROKE_COLORS = [
   "#000000",
   "#ef4444",
@@ -26,8 +24,6 @@ const BG_COLORS = [
   "#fdf4ff",
   "#f9fafb",
 ];
-
-
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -100,7 +96,15 @@ interface SliderProps {
   unit?: string;
 }
 
-function Slider({ label, min, max, step = 1, value, onChange, unit }: SliderProps) {
+function Slider({
+  label,
+  min,
+  max,
+  step = 1,
+  value,
+  onChange,
+  unit,
+}: SliderProps) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
@@ -123,8 +127,6 @@ function Slider({ label, min, max, step = 1, value, onChange, unit }: SliderProp
   );
 }
 
-
-
 export default function PropertiesPanel() {
   const selectedElementId = useCanvasStore((s) => s.selectedElementId);
   const elements = useCanvasStore((s) => s.elements);
@@ -146,7 +148,7 @@ export default function PropertiesPanel() {
 
   return (
     <div
-      className="fixed right-4 top-1/2 z-20 flex w-56 -translate-y-1/2 flex-col gap-4 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-2xl backdrop-blur-md"
+      className="fixed right-2 sm:right-4 top-16 sm:top-1/2 z-20 flex w-52 sm:w-56 sm:-translate-y-1/2 max-h-[70vh] overflow-y-auto flex-col gap-3 sm:gap-4 rounded-2xl border border-slate-200 bg-white/95 p-3.5 sm:p-4 shadow-2xl backdrop-blur-md"
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}

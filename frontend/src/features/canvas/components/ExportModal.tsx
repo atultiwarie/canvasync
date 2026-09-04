@@ -51,7 +51,7 @@ export default function ExportModal({ boardTitle = "board", isOpen, onClose }: E
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-72 rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+      <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-5 shadow-2xl sm:w-72">
 
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">

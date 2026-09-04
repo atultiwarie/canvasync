@@ -1,8 +1,6 @@
 import { api } from "../../lib/api";
 import type { CanvasElement } from "../canvas/types/canvas.types";
 
-
-
 export interface BoardMember {
   _id: string;
   name: string;
@@ -46,7 +44,6 @@ export interface JoinBoardResponse {
   role: "viewer" | "editor" | "owner";
 }
 
-
 export const boardService = {
   async list(): Promise<Board[]> {
     const { data } = await api.get("/api/boards");
@@ -65,13 +62,16 @@ export const boardService = {
 
   async updateMeta(
     boardId: string,
-    payload: { title?: string; description?: string }
+    payload: { title?: string; description?: string },
   ): Promise<Board> {
     const { data } = await api.put(`/api/boards/${boardId}`, payload);
     return data.data;
   },
 
-  async saveElements(boardId: string, elements: CanvasElement[]): Promise<void> {
+  async saveElements(
+    boardId: string,
+    elements: CanvasElement[],
+  ): Promise<void> {
     await api.put(`/api/boards/${boardId}`, { elements });
   },
 
@@ -86,7 +86,7 @@ export const boardService = {
     payload: {
       role?: "viewer" | "editor";
       expiresIn?: "1d" | "7d" | "30d" | "never";
-    } = {}
+    } = {},
   ): Promise<CreateInviteResponse> {
     const { data } = await api.post(`/api/boards/${boardId}/invite`, {
       role: payload.role ?? "editor",
@@ -100,7 +100,31 @@ export const boardService = {
     return data.data;
   },
 
-  async removeCollaborator(boardId: string, targetUserId: string): Promise<void> {
+  async removeCollaborator(
+    boardId: string,
+    targetUserId: string,
+  ): Promise<void> {
     await api.delete(`/api/boards/${boardId}/collaborators/${targetUserId}`);
   },
+
+  // ─── Phase 6: AI Summarization ────────────────────────────────────────────
+  async summarizeBoard(
+    boardId: string,
+    imageBase64: string,
+    boardTitle?: string,
+  ): Promise<AISummaryResult> {
+    const { data } = await api.post(`/api/boards/${boardId}/ai/summarize`, {
+      image: imageBase64,
+      boardTitle,
+    });
+    return data.data as AISummaryResult;
+  },
 };
+
+export interface AISummaryResult {
+  title: string;
+  summary: string;
+  components: string[];
+  insights: string[];
+  rawMarkdown: string;
+}

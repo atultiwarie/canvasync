@@ -12,7 +12,7 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export default function UserMenu() {
+export default function UserMenu({ className }: { className?: string } = {}) {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -43,7 +43,7 @@ export default function UserMenu() {
   return (
     <div
       ref={menuRef}
-      className="fixed right-4 top-4 z-20"
+      className={className ?? "fixed right-2 top-2 z-30 sm:right-4 sm:top-4"}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Avatar trigger */}
